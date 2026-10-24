@@ -147,3 +147,6 @@ vite.config.ts.timestamp-*
 
 # Turbo Repo
 .turbo
+
+# Programas de vídeo (yt-dlp, ffmpeg): los descarga scripts/fetch-tools.js
+tools/

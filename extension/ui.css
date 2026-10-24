@@ -89,3 +89,7 @@ form { display: flex; flex-direction: column; gap: 14px; }
 .message { min-height: 18px; }
 .message.ok { color: var(--ok); }
 .message.error { color: var(--err); }
+
+/* ---------- Botón "descargar esta página" ---------- */
+.page-box { display: flex; flex-direction: column; gap: 6px; }
+.btn.big { width: 100%; padding: 10px 12px; font-size: 14px; }

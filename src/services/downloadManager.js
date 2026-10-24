@@ -36,6 +36,7 @@ const crypto = require('node:crypto');
 const { EventEmitter } = require('node:events');
 
 const { DownloadTask } = require('./downloadTask');
+const { MediaTask, finalExtension } = require('./mediaTask');
 const { categorize, getCategoryDirectory } = require('../utils/categories');
 const { fileNameFromUrl, sanitizeFileName } = require('../utils/fileName');
 const { normalizeSha256 } = require('../utils/hash');
@@ -53,8 +54,9 @@ class DownloadManager extends EventEmitter {
    * @param {() => object} deps.getSettings - Devuelve la configuración actual.
    * @param {import('./speedLimiter').SpeedLimiter} deps.limiter - Limitador global.
    */
-  constructor({ storage, getSettings, limiter }) {
+  constructor({ storage, getSettings, limiter, mediaTools = null }) {
     super();
+    this.mediaTools = mediaTools; // Herramientas de vídeo (yt-dlp/ffmpeg); null = sin soporte de vídeo.
     this.storage = storage;
     this.getSettings = getSettings;
     this.limiter = limiter;
@@ -231,6 +233,107 @@ class DownloadManager extends EventEmitter {
   }
 
   /**
+   * Añade una descarga de VÍDEO o AUDIO de una página (YouTube, etc.).
+   * Se descarga con yt-dlp (ver mediaTask.js) pero usa la misma cola, el mismo
+   * historial y los mismos botones que cualquier otra descarga.
+   * @param {object} options
+   * @param {string} options.url - Página del vídeo.
+   * @param {string} options.title - Título (será el nombre del archivo).
+   * @param {'video'|'audio'} options.mode - Qué descargar.
+   * @param {number|null} [options.height] - Altura máxima del vídeo (null = la mejor).
+   * @param {'mp3'|'m4a'|'opus'} [options.audioFormat='mp3'] - Formato del audio.
+   * @param {number} [options.audioQuality=0] - kbps (0 = la mejor).
+   * @param {number|null} [options.estimatedBytes] - Tamaño aproximado (para el % total).
+   * @param {string} [options.directory] - Carpeta deseada (si no, la de su categoría).
+   * @param {number} [options.scheduledAt] - Marca de tiempo (ms) para empezar más tarde.
+   * @param {boolean} [options.startNow=true]
+   * @param {string} [options.source='manual']
+   * @returns {object} La descarga creada (copia pública).
+   * @throws {Error} Si la URL no es válida o faltan las herramientas de vídeo.
+   */
+  addMedia(options) {
+    const settings = this.getSettings();
+    if (!this.mediaTools?.available) {
+      throw new Error('Faltan las herramientas de vídeo (yt-dlp o ffmpeg). Reinstala la aplicación o ejecuta "npm run tools".');
+    }
+    let url;
+    try {
+      url = new URL(String(options.url || '').trim());
+    } catch {
+      throw new Error('La URL no es válida.');
+    }
+    if (url.protocol !== 'http:' && url.protocol !== 'https:') throw new Error('Solo se admiten direcciones http:// o https://');
+
+    const mode = options.mode === 'audio' ? 'audio' : 'video';
+    const media = {
+      mode,
+      height: mode === 'video' && Number(options.height) > 0 ? Math.round(Number(options.height)) : null,
+      audioFormat: ['mp3', 'm4a', 'opus'].includes(options.audioFormat) ? options.audioFormat : 'mp3',
+      audioQuality: [0, 128, 192, 256, 320].includes(Number(options.audioQuality)) ? Number(options.audioQuality) : 0,
+      estimatedBytes: Number(options.estimatedBytes) > 0 ? Math.round(Number(options.estimatedBytes)) : null,
+    };
+
+    const title = String(options.title || '').trim() || 'video';
+    const fileName = sanitizeFileName(`${title}.${finalExtension(media)}`);
+    const category = categorize(fileName);
+    const customDirectory = Boolean(options.directory && String(options.directory).trim());
+    const directory = customDirectory ? path.resolve(String(options.directory)) : getCategoryDirectory(category, settings);
+
+    const scheduledAt = Number(options.scheduledAt) || null;
+    let status = 'queued';
+    if (scheduledAt && scheduledAt > Date.now()) status = 'scheduled';
+    else if (options.startNow === false) status = 'paused';
+
+    const item = {
+      id: crypto.randomUUID(),
+      kind: 'media',
+      media,
+      url: url.href,
+      fileName,
+      customFileName: false,
+      directory,
+      customDirectory,
+      savePath: null,
+      category,
+      totalBytes: media.estimatedBytes,
+      downloadedBytes: 0,
+      resumable: true,
+      probed: true,
+      connections: settings.connections,
+      segments: [],
+      status,
+      error: null,
+      retryInfo: null,
+      speed: 0,
+      eta: null,
+      createdAt: Date.now(),
+      queuedAt: Date.now(),
+      completedAt: null,
+      scheduledAt: status === 'scheduled' ? scheduledAt : null,
+      expectedHash: null,
+      actualHash: null,
+      hashOk: null,
+      headers: {},
+      source: ['manual', 'clipboard', 'browser'].includes(options.source) ? options.source : 'manual',
+    };
+
+    this.items.set(item.id, item);
+    this.notify(item);
+    this.scheduleSave();
+    this.processQueue();
+    return this.toPublic(item);
+  }
+
+  /**
+   * Borra los archivos temporales de una descarga sin terminar, según su tipo.
+   * @param {object} item
+   * @returns {Promise<void>}
+   */
+  cleanupTemp(item) {
+    return item.kind === 'media' ? MediaTask.removeTempFiles(item) : DownloadTask.removeTempFiles(item);
+  }
+
+  /**
    * Solo dejamos pasar cabeceras seguras y útiles para descargar.
    * @param {object} headers
    * @returns {object}
@@ -303,7 +406,7 @@ class DownloadManager extends EventEmitter {
       await running.promise;
       return;
     }
-    await DownloadTask.removeTempFiles(item);
+    await this.cleanupTemp(item);
     this.resetProgress(item);
     item.status = 'canceled';
     this.notify(item);
@@ -327,7 +430,7 @@ class DownloadManager extends EventEmitter {
       await running.promise;
     }
     // Las partes temporales de una descarga sin terminar ya no sirven para nada.
-    await DownloadTask.removeTempFiles(item);
+    await this.cleanupTemp(item);
 
     if (deleteFile && item.status === 'completed' && item.savePath) {
       try {
@@ -411,7 +514,7 @@ class DownloadManager extends EventEmitter {
     item.probed = false;
     item.segments = [];
     item.downloadedBytes = 0;
-    item.totalBytes = null;
+    item.totalBytes = item.kind === 'media' ? item.media?.estimatedBytes ?? null : null;
     item.savePath = null;
     item.error = null;
     item.actualHash = null;
@@ -440,11 +543,11 @@ class DownloadManager extends EventEmitter {
    * @returns {void}
    */
   startTask(item) {
-    const task = new DownloadTask(item, {
-      limiter: this.limiter,
-      getSettings: this.getSettings,
-      isPathReserved: (fullPath, selfId) => this.isPathReserved(fullPath, selfId),
-    });
+    const isPathReserved = (fullPath, selfId) => this.isPathReserved(fullPath, selfId);
+    const task =
+      item.kind === 'media'
+        ? new MediaTask(item, { tools: this.mediaTools, getSettings: this.getSettings, isPathReserved })
+        : new DownloadTask(item, { limiter: this.limiter, getSettings: this.getSettings, isPathReserved });
 
     task.on('progress', () => {
       this.notify(item);

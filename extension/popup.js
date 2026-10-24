@@ -58,8 +58,8 @@ function fileNameOf(url) {
  * @param {string} url
  * @returns {Promise<{ok:boolean, error?:string}>}
  */
-function send(url) {
-  return chrome.runtime.sendMessage({ type: 'send', data: { url, referrer: pageUrl } });
+function send(url, page) {
+  return chrome.runtime.sendMessage({ type: 'send', data: { url, referrer: pageUrl, page } });
 }
 
 /**
@@ -116,7 +116,7 @@ async function renderLinks() {
     button.textContent = 'Enviar';
     button.addEventListener('click', async () => {
       button.disabled = true;
-      const res = await send(link.url);
+      const res = await send(link.url, false);
       button.textContent = res?.ok ? '✓ Enviado' : 'Error';
       button.title = res?.error || '';
       if (!res?.ok) button.disabled = false;
@@ -130,7 +130,7 @@ sendAllBtn.addEventListener('click', async () => {
   sendAllBtn.disabled = true;
   let ok = 0;
   for (const link of foundLinks) {
-    const res = await send(link.url);
+    const res = await send(link.url, false);
     if (res?.ok) ok++;
   }
   sendAllBtn.textContent = `✓ ${ok}/${foundLinks.length} enviados`;
@@ -139,7 +139,34 @@ sendAllBtn.addEventListener('click', async () => {
 interceptEl.addEventListener('change', () => chrome.storage.local.set({ intercept: interceptEl.checked }));
 document.getElementById('open-options').addEventListener('click', () => chrome.runtime.openOptionsPage());
 
+/**
+ * Botón principal: analizar la página actual como vídeo/audio.
+ * @returns {Promise<void>}
+ */
+async function setupPageButton() {
+  const button = document.getElementById('send-page');
+  const hint = document.getElementById('page-hint');
+  const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+  const url = tab?.url || '';
+  if (!/^https?:/i.test(url)) {
+    button.disabled = true;
+    hint.textContent = 'Esta página no se puede analizar.';
+    return;
+  }
+  const known = ldIsVideoPage(url);
+  hint.textContent = known ? 'Vídeo detectado: elige calidad o solo audio en la app.' : 'Busca un vídeo o audio en esta página.';
+  if (known) button.classList.add('primary');
+  button.addEventListener('click', async () => {
+    button.disabled = true;
+    const res = await send(url, true);
+    button.textContent = res?.ok ? '✓ Enviado: míralo en la app' : 'No se pudo enviar';
+    hint.textContent = res?.ok ? '' : res?.error || '';
+    if (!res?.ok) button.disabled = false;
+  });
+}
+
 // Arranque
+setupPageButton();
 ldGetConfig().then((config) => (interceptEl.checked = config.intercept));
 renderStatus();
 renderLinks();

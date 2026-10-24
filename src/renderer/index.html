@@ -22,7 +22,7 @@
     -->
     <meta
       http-equiv="Content-Security-Policy"
-      content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; connect-src 'none'; object-src 'none'; base-uri 'none'"
+      content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: https:; connect-src 'none'; object-src 'none'; base-uri 'none'"
     />
     <title>LibreDescarga</title>
     <link rel="stylesheet" href="styles.css" />
@@ -168,8 +168,69 @@
           </label>
           <div class="probe-info" id="add-probe" hidden></div>
 
+          <!-- Vídeo o lista de YouTube, etc.: aquí se elige qué y cómo descargar -->
+          <div class="media-box" id="add-media" hidden>
+            <div class="media-card" id="media-card">
+              <img id="media-thumb" alt="" width="128" height="72" hidden />
+              <div class="media-card-text">
+                <div class="media-title" id="media-title"></div>
+                <div class="muted small" id="media-meta"></div>
+              </div>
+            </div>
+
+            <div class="callout" id="media-playlist-hint" hidden>
+              <span id="media-playlist-hint-text">Este vídeo forma parte de una lista.</span>
+              <button type="button" class="btn" id="media-load-playlist"><span data-icon="list-video"></span><span>Ver la lista completa</span></button>
+            </div>
+
+            <div id="media-list" hidden>
+              <div class="media-list-head">
+                <strong id="media-list-count"></strong>
+                <span class="spacer"></span>
+                <button type="button" class="btn small" id="media-select-all">Todos</button>
+                <button type="button" class="btn small" id="media-select-none">Ninguno</button>
+              </div>
+              <div class="media-entries" id="media-entries"></div>
+            </div>
+
+            <div class="field">
+              <span class="field-label">¿Qué quieres descargar?</span>
+              <div class="mode-switch">
+                <label class="theme-card"><input type="radio" name="media-mode" value="video" checked /><span data-icon="film"></span><span>Vídeo (MP4)</span></label>
+                <label class="theme-card"><input type="radio" name="media-mode" value="audio" /><span data-icon="music"></span><span>Solo audio</span></label>
+              </div>
+            </div>
+
+            <!-- Calidad de vídeo: las opciones se generan al analizar el enlace -->
+            <div class="field" id="media-video-opts">
+              <span class="field-label">Calidad del vídeo</span>
+              <div class="chip-group" id="media-height-group"></div>
+            </div>
+
+            <div id="media-audio-opts" hidden>
+              <div class="field">
+                <span class="field-label">Formato</span>
+                <div class="chip-group">
+                  <label class="opt"><input type="radio" name="media-audio-format" value="mp3" checked /><span>MP3 <small>compatible con todo</small></span></label>
+                  <label class="opt"><input type="radio" name="media-audio-format" value="m4a" /><span>M4A <small>AAC</small></span></label>
+                  <label class="opt"><input type="radio" name="media-audio-format" value="opus" /><span>OPUS <small>más calidad por tamaño</small></span></label>
+                </div>
+              </div>
+              <div class="field" id="media-audio-quality-field">
+                <span class="field-label">Calidad del audio</span>
+                <div class="chip-group">
+                  <label class="opt"><input type="radio" name="media-audio-quality" value="0" checked /><span>La mejor</span></label>
+                  <label class="opt"><input type="radio" name="media-audio-quality" value="320" /><span>320 kbps</span></label>
+                  <label class="opt"><input type="radio" name="media-audio-quality" value="256" /><span>256 kbps</span></label>
+                  <label class="opt"><input type="radio" name="media-audio-quality" value="192" /><span>192 kbps</span></label>
+                  <label class="opt"><input type="radio" name="media-audio-quality" value="128" /><span>128 kbps</span></label>
+                </div>
+              </div>
+            </div>
+          </div>
+
           <div class="grid-2">
-            <label class="field">
+            <label class="field" data-direct-only>
               <span class="field-label">Nombre del archivo <span class="muted">(opcional)</span></span>
               <input id="add-name" type="text" placeholder="Se detecta automáticamente" />
             </label>
@@ -181,16 +242,6 @@
               </div>
             </label>
           </div>
-
-          <label class="field">
-            <span class="field-label">Conexiones simultáneas: <strong id="add-connections-value">8</strong></span>
-            <input id="add-connections" type="range" min="1" max="16" value="8" />
-          </label>
-
-          <label class="field">
-            <span class="field-label">SHA-256 esperado <span class="muted">(opcional, para verificar la integridad)</span></span>
-            <input id="add-hash" type="text" spellcheck="false" placeholder="64 caracteres hexadecimales" />
-          </label>
 
           <div class="field">
             <label class="check">
@@ -249,6 +300,7 @@
             <button type="button" class="tab" data-tab="connections"><span data-icon="gauge"></span> Conexiones</button>
             <button type="button" class="tab" data-tab="appearance"><span data-icon="palette"></span> Apariencia</button>
             <button type="button" class="tab" data-tab="browser"><span data-icon="globe"></span> Navegador</button>
+            <button type="button" class="tab" data-tab="media"><span data-icon="film"></span> Vídeo y audio</button>
             <button type="button" class="tab" data-tab="updates"><span data-icon="refresh-cw"></span> Actualizaciones</button>
           </nav>
           <div class="modal-body tab-panels">
@@ -298,6 +350,17 @@
                 <label class="theme-card"><input type="radio" name="theme" value="light" /><span data-icon="sun"></span><span>Claro</span></label>
                 <label class="theme-card"><input type="radio" name="theme" value="dark" /><span data-icon="moon"></span><span>Oscuro</span></label>
               </div>
+              <div class="field-label">Color de la aplicación</div>
+              <div class="swatches" id="accent-swatches">
+                <label class="swatch" title="Azul"><input type="radio" name="accent" value="blue" /><span class="dot" style="--c: #4f46e5"></span><span>Azul</span></label>
+                <label class="swatch" title="Verde"><input type="radio" name="accent" value="green" /><span class="dot" style="--c: #15803d"></span><span>Verde</span></label>
+                <label class="swatch" title="Rojo"><input type="radio" name="accent" value="red" /><span class="dot" style="--c: #dc2626"></span><span>Rojo</span></label>
+                <label class="swatch" title="Morado"><input type="radio" name="accent" value="purple" /><span class="dot" style="--c: #7c3aed"></span><span>Morado</span></label>
+                <label class="swatch" title="Naranja"><input type="radio" name="accent" value="orange" /><span class="dot" style="--c: #c2410c"></span><span>Naranja</span></label>
+                <label class="swatch" title="Rosa"><input type="radio" name="accent" value="pink" /><span class="dot" style="--c: #db2777"></span><span>Rosa</span></label>
+                <label class="swatch" title="Turquesa"><input type="radio" name="accent" value="teal" /><span class="dot" style="--c: #0f766e"></span><span>Turquesa</span></label>
+                <label class="swatch" title="Grafito"><input type="radio" name="accent" value="slate" /><span class="dot" style="--c: #475569"></span><span>Grafito</span></label>
+              </div>
               <label class="check"><input id="set-tray" type="checkbox" /><span>Al cerrar la ventana, seguir en la bandeja del sistema</span></label>
               <label class="check"><input id="set-notifications" type="checkbox" /><span>Mostrar notificación al terminar cada descarga</span></label>
               <label class="check"><input id="set-clipboard" type="checkbox" /><span>Detectar automáticamente enlaces copiados al portapapeles</span></label>
@@ -332,6 +395,36 @@
                 <button type="button" class="btn" id="set-open-extension"><span data-icon="folder-open"></span><span>Abrir carpeta de la extensión</span></button>
               </div>
             </section>
+            <!-- Vídeo y audio -->
+            <section class="tab-panel" data-panel="media" hidden>
+              <div class="update-box">
+                <div class="update-title">Motor de vídeo y audio</div>
+                <div class="update-text muted" id="engine-text">Comprobando…</div>
+                <div class="update-actions">
+                  <button type="button" class="btn" id="engine-update"><span data-icon="refresh-cw"></span><span>Actualizar el motor</span></button>
+                </div>
+              </div>
+              <p class="muted small">
+                Las páginas de vídeo cambian a menudo. Si una descarga falla de repente, actualizar el motor suele arreglarlo.
+              </p>
+              <label class="field">
+                <span class="field-label">Usar las cookies de mi navegador <span class="muted">(opcional)</span></span>
+                <select id="set-cookies-browser">
+                  <option value="">No usar cookies</option>
+                  <option value="chrome">Google Chrome</option>
+                  <option value="edge">Microsoft Edge</option>
+                  <option value="firefox">Mozilla Firefox</option>
+                  <option value="brave">Brave</option>
+                  <option value="opera">Opera</option>
+                  <option value="vivaldi">Vivaldi</option>
+                </select>
+              </label>
+              <p class="muted small">
+                Solo hace falta si YouTube pide "confirmar que no eres un robot" o el vídeo tiene restricción de edad. Debes
+                tener la sesión iniciada en ese navegador. Si falla con Chrome o Edge, cierra el navegador y vuelve a intentarlo, o usa Firefox.
+              </p>
+            </section>
+
             <!-- Actualizaciones -->
             <section class="tab-panel" data-panel="updates" hidden>
               <div class="update-box">

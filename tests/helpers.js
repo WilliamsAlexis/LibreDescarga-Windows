@@ -148,9 +148,10 @@ function tempDir() {
  * Crea un gestor de descargas con almacenamiento en memoria.
  * @param {object} [overrides] - Cambios sobre la configuración por defecto.
  * @param {{saved: object[]}} [memory] - Almacenamiento compartido (para simular reinicios).
+ * @param {{mediaTools?: object}} [extra] - Dependencias opcionales (herramientas de vídeo).
  * @returns {{manager: DownloadManager, settings: object, memory: {saved: object[]}, dir: string}}
  */
-function createManager(overrides = {}, memory = { saved: [] }) {
+function createManager(overrides = {}, memory = { saved: [] }, extra = {}) {
   const dir = overrides.downloadDir || tempDir();
   const settings = { ...createDefaultSettings(dir), downloadDir: dir, ...overrides };
   const manager = new DownloadManager({
@@ -162,6 +163,7 @@ function createManager(overrides = {}, memory = { saved: [] }) {
     },
     getSettings: () => settings,
     limiter: new SpeedLimiter(),
+    mediaTools: extra.mediaTools || null,
   });
   manager.init();
   return { manager, settings, memory, dir };

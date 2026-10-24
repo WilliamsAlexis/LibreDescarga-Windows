@@ -16,7 +16,7 @@
  */
 
 const { clipboard } = require('electron');
-const { looksLikeDownloadUrl } = require('../utils/categories');
+const { looksLikeDownloadUrl, looksLikeVideoPageUrl } = require('../utils/categories');
 
 class ClipboardWatcher {
   /**
@@ -84,7 +84,7 @@ class ClipboardWatcher {
       this.lastText = text;
       if (isFirstRead || !this.timer) return; // No avisamos de lo que ya estaba copiado.
       const trimmed = text.trim();
-      if (looksLikeDownloadUrl(trimmed)) this.onUrl(trimmed);
+      if (looksLikeDownloadUrl(trimmed) || looksLikeVideoPageUrl(trimmed)) this.onUrl(trimmed);
     } catch (err) {
       console.error('Error leyendo el portapapeles:', err);
     } finally {

@@ -121,4 +121,39 @@ function looksLikeDownloadUrl(text) {
   }
 }
 
-module.exports = { CATEGORIES, categorize, getExtension, getCategoryDirectory, looksLikeDownloadUrl };
+/**
+ * Reglas para reconocer una PÁGINA de vídeo o audio (no la portada del sitio).
+ * Cada regla: servidor + forma de la ruta. Así "youtube.com" a secas no cuenta,
+ * pero "youtube.com/watch?v=..." sí.
+ */
+const VIDEO_PAGE_RULES = [
+  { host: /(^|\.)youtube\.com$/, test: (u) => (u.pathname === '/watch' && u.searchParams.has('v')) || /^\/(shorts|live|embed)\//.test(u.pathname) || (u.pathname === '/playlist' && u.searchParams.has('list')) },
+  { host: /(^|\.)youtu\.be$/, test: (u) => u.pathname.length > 1 },
+  { host: /(^|\.)vimeo\.com$/, test: (u) => /^\/(\w+\/)?\d+/.test(u.pathname) },
+  { host: /(^|\.)tiktok\.com$/, test: (u) => /\/video\/\d+/.test(u.pathname) },
+  { host: /(^|\.)(twitter|x)\.com$/, test: (u) => /\/status\/\d+/.test(u.pathname) },
+  { host: /(^|\.)instagram\.com$/, test: (u) => /^\/(reel|reels|p|tv)\//.test(u.pathname) },
+  { host: /(^|\.)facebook\.com$/, test: (u) => /\/(videos|reel|watch)/.test(u.pathname) },
+  { host: /(^|\.)dailymotion\.com$/, test: (u) => /^\/video\//.test(u.pathname) },
+  { host: /(^|\.)twitch\.tv$/, test: (u) => /\/(videos|clip)\//.test(u.pathname) },
+  { host: /(^|\.)soundcloud\.com$/, test: (u) => u.pathname.split('/').filter(Boolean).length >= 2 },
+  { host: /(^|\.)bandcamp\.com$/, test: (u) => /^\/(track|album)\//.test(u.pathname) },
+];
+
+/**
+ * ¿Es esta URL la página de un vídeo, canción o lista de un sitio conocido?
+ * Se usa junto a looksLikeDownloadUrl en la detección del portapapeles.
+ * @param {string} text - Texto a comprobar.
+ * @returns {boolean}
+ */
+function looksLikeVideoPageUrl(text) {
+  try {
+    const url = new URL(String(text).trim());
+    if (url.protocol !== 'http:' && url.protocol !== 'https:') return false;
+    return VIDEO_PAGE_RULES.some((rule) => rule.host.test(url.hostname) && rule.test(url));
+  } catch {
+    return false;
+  }
+}
+
+module.exports = { CATEGORIES, categorize, getExtension, getCategoryDirectory, looksLikeDownloadUrl, looksLikeVideoPageUrl };

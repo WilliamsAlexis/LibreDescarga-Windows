@@ -6,9 +6,11 @@ Gestor de descargas acelerado para Windows, al estilo de Internet Download Manag
 - **Pausar, reanudar y cancelar**, incluso después de cerrar y volver a abrir la app.
 - **Cola** con límite de descargas simultáneas, **reintentos automáticos** con espera progresiva y **limitador de velocidad** global.
 - **Categorías automáticas** (Videos, Música, Documentos, Programas, Comprimidos y Otros), cada una con su propia carpeta.
-- **Historial** persistente con búsqueda y filtros, **programador** por hora y verificación **SHA-256** opcional.
+- **Historial** persistente con búsqueda y filtros, **programador** por hora y cambio de color de la interfaz.
 - **Bandeja del sistema**, notificaciones, tema claro y oscuro, menú contextual y detección del portapapeles.
-- **Extensión para Chrome y Edge** que envía los enlaces a la app.
+- **Vídeo y audio de YouTube, YouTube Music y cientos de sitios más**: elige la calidad (hasta 4K) o solo el audio en MP3, M4A u OPUS, y descarga **listas de reproducción** completas o solo los vídeos que marques.
+- **Colores a elegir** para la interfaz (azul, verde, rojo, morado, naranja, rosa, turquesa y grafito), además del tema claro y oscuro.
+- **Extensión para Chrome y Edge**: botón flotante en las páginas de vídeo, botón en el icono de la extensión y menú de clic derecho.
 
 ---
 
@@ -64,12 +66,16 @@ windows/
 │   │   ├── downloadTask.js     Motor: segmentos, Range, reintentos, pausa y reanudación, unión y hash
 │   │   ├── downloadManager.js  Cola, límite de simultáneas, eventos y persistencia
 │   │   ├── speedLimiter.js     Limitador global (token bucket) compartido por todas las conexiones
+│   │   ├── mediaTask.js        Descarga de vídeo/audio con yt-dlp (misma forma que downloadTask)
+│   │   ├── mediaService.js     Analiza un enlace: ¿archivo, vídeo o lista? Calidades y elementos
+│   │   ├── mediaTools.js       Localiza, ejecuta y actualiza yt-dlp y ffmpeg
 │   │   ├── scheduler.js        Programador de descargas por hora
 │   │   ├── updater.js          Actualizaciones automáticas (electron-updater)
 │   │   ├── settingsService.js  Valores por defecto y validación de la configuración
 │   │   └── browserServer.js    Servidor HTTP local (127.0.0.1) para la extensión
 │   └── utils/              Utilidades: categories, fileName, format, hash, http, sleep
 ├── extension/              Extensión de Chrome y Edge (Manifest V3)
+├── tools/                  yt-dlp.exe y ffmpeg.exe (los prepara scripts/fetch-tools.js; no se suben a git)
 └── tests/                  Pruebas automáticas (node --test) con un servidor HTTP de prueba
 ```
 
@@ -85,12 +91,33 @@ windows/
 
 Las descargas usan solo los módulos nativos `http` y `https` de Node.js. Así se controlan las cabeceras `Range`, los reintentos y la velocidad. El diseño está hecho con CSS propio basado en variables, para los temas, sin depender de Tailwind.
 
+Para descargar vídeo y audio se usan dos programas externos, que se incluyen en el instalador:
+
+| Programa | Por qué |
+|---|---|
+| **yt-dlp** | El proyecto de código abierto de referencia para extraer vídeo y audio de YouTube y cientos de sitios. Se actualiza solo (como mucho cada 3 días) porque YouTube cambia a menudo. |
+| **ffmpeg** *(paquete `ffmpeg-static`)* | Une el vídeo con el audio y convierte a MP3. |
+
+`npm start`, `npm run dist` y `npm run pack` los descargan solos en la carpeta `tools/` la primera vez. Para volver a bajarlos: `npm run tools`.
+
 ## 5. Uso
 
 ### Agregar una descarga
-- Pulsa **Agregar URL** (o `Ctrl+N`), pega el enlace y elige el número de conexiones, la carpeta, el hash SHA-256 (opcional) y la hora de inicio (opcional).
+- Pulsa **Agregar URL** (o `Ctrl+N`), pega el enlace y la app lo **analiza** para saber si es un archivo, un vídeo o una lista. Puedes elegir la carpeta y la hora de inicio (opcional).
 - **Portapapeles:** si copias una URL descargable, la app te ofrece añadirla. Se puede desactivar en Configuración.
 - **Ctrl+V** fuera de un campo de texto, o **arrastrar y soltar** un enlace sobre la ventana, abre el mismo diálogo.
+
+### Vídeos, música y listas
+Si el enlace es de YouTube, YouTube Music, Vimeo, TikTok, etc., el diálogo muestra la miniatura y el título, y te deja elegir con botones de opción:
+- **Vídeo (MP4)** y su **calidad** (2160p, 1080p, 720p…, con el tamaño aproximado de cada una).
+- **Solo audio**: formato (MP3, M4A u OPUS) y calidad (320, 256, 192, 128 kbps o la mejor).
+- Si el enlace es de un vídeo que está dentro de una lista, aparece **Ver la lista completa**. En una lista marcas los vídeos que quieras (o *Todos* / *Ninguno*) y cada uno entra en la cola como una descarga más.
+
+Los vídeos usan la misma cola, pausa, reanudación, cancelación, programador y límite de velocidad que el resto. Los MP4 van a *Videos* y el audio a *Música*.
+
+Si YouTube pide "confirmar que no eres un robot" o el vídeo tiene restricción de edad, ve a **Configuración → Vídeo y audio** y elige tu navegador para usar sus cookies (con la sesión iniciada en él). Si una descarga falla de repente, pulsa ahí **Actualizar el motor**.
+
+> Descarga solo contenido que tengas derecho a descargar. Algunos sitios lo prohíben en sus condiciones de uso.
 
 ### Gestionar descargas
 - Barra superior: iniciar, pausar, cancelar, eliminar, *iniciar todas*, *pausar todas* y *programar*.
@@ -103,7 +130,7 @@ Las descargas usan solo los módulos nativos `http` y `https` de Node.js. Así s
 El progreso de cada segmento se guarda continuamente. Si cierras la app, o se va la luz, al volver a abrirla las descargas aparecen en **Sin terminar**. Al reanudarlas, siguen desde el último byte guardado, siempre que el servidor admita `Range`.
 
 ### Configuración (icono de engranaje)
-Carpeta por defecto y carpeta por categoría, conexiones por descarga (1–16), descargas simultáneas, límite de velocidad (KB/s, 0 = sin límite), reintentos, tema (sistema, claro u oscuro), portapapeles, bandeja, notificaciones y el servidor para la extensión (puerto y token).
+Carpeta por defecto y carpeta por categoría, conexiones por descarga (1–16), descargas simultáneas, límite de velocidad (KB/s, 0 = sin límite), reintentos, tema (sistema, claro u oscuro), **color de la aplicación**, navegador para las cookies y actualización del motor de vídeo, portapapeles, bandeja, notificaciones y el servidor para la extensión (puerto y token).
 
 ### Bandeja del sistema
 Al cerrar la ventana, la app se minimiza a la bandeja y sigue descargando. Haz clic en el icono para volver a abrirla. Para cerrarla del todo, usa **Salir** en el menú del icono.
@@ -116,8 +143,10 @@ Al cerrar la ventana, la app se minimiza a la bandeja y sigue descargando. Haz c
 4. Abre las **opciones** de la extensión, pega el token, comprueba el puerto y pulsa *Probar conexión*.
 
 Funciones de la extensión:
-- Menú de clic derecho **"Descargar con LibreDescarga"** sobre enlaces, imágenes, vídeos y audios.
-- La ventana emergente lista los enlaces descargables de la página.
+- **Botón flotante "Descargar con LibreDescarga"** en las páginas de vídeo de YouTube, YouTube Music, Vimeo, TikTok, SoundCloud, etc. Al pulsarlo, la app se abre con el vídeo analizado para que elijas calidad o formato.
+- Botón **"Descargar vídeo o audio de esta página"** en la ventana del icono de la extensión.
+- Menú de clic derecho: **"Descargar vídeo o audio de esta página"** (en cualquier página) y **"Descargar con LibreDescarga"** sobre enlaces, imágenes, vídeos y audios.
+- La ventana emergente lista además los enlaces a archivos de la página.
 - Opcionalmente, **intercepta** las descargas del navegador. Si la app no está abierta, deja que el navegador descargue con normalidad.
 
 Seguridad: el servidor solo escucha en `127.0.0.1`, exige la cabecera `X-LibreDescarga-Token`, compara el token en tiempo constante y valida las URLs. Si regeneras el token en la app, actualízalo también en la extensión.
@@ -128,12 +157,12 @@ Seguridad: el servidor solo escucha en `127.0.0.1`, exige la cabecera `X-LibreDe
 npm test
 ```
 
-Son 23 pruebas (5 son del actualizador, con un servidor de actualizaciones simulado): reparto de segmentos, descarga con 8 conexiones con bytes idénticos al original, servidor sin `Range`, tamaño desconocido, reintentos, pausa con cierre y reanudación, cancelación, SHA-256, error 404, cola, limitador de velocidad, validación de la configuración, historial persistente, programador, servidor de la extensión, el flujo del actualizador y una **descarga real** de 10 MB desde internet.
+Son 39 pruebas (16 de vídeo y audio, con descargas reales de YouTube en MP4 y MP3, pausa, reanudación y cancelación; 5 del actualizador, con un servidor simulado): reparto de segmentos, descarga con 8 conexiones con bytes idénticos al original, servidor sin `Range`, tamaño desconocido, reintentos, pausa con cierre y reanudación, cancelación, SHA-256, error 404, cola, limitador de velocidad, validación de la configuración, historial persistente, programador, servidor de la extensión, el flujo del actualizador y una **descarga real** de 10 MB desde internet.
 
 ## 8. Empaquetado (instalador .exe)
 
 ```powershell
-npm run dist     # Genera el instalador:  dist\LibreDescarga-Setup-1.0.0.exe
+npm run dist     # Genera el instalador:  dist\LibreDescarga-Setup-1.1.0.exe
 npm run pack     # Solo la carpeta portable: dist\win-unpacked\LibreDescarga.exe (más rápido, útil para probar)
 npm run icons    # (Opcional) Vuelve a dibujar los iconos
 ```

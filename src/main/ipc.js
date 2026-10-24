@@ -116,6 +116,43 @@ function registerIpc(ctx) {
     return { fileName: info.fileName, totalBytes: info.totalBytes, resumable: info.resumable };
   });
 
+  // Analiza una URL: ¿archivo directo, vídeo o lista? (ver mediaService.js)
+  handle('media:resolve', async (url, options) => {
+    if (typeof url !== 'string') throw new Error('URL no válida');
+    return ctx.media.resolve(url.trim(), { playlist: Boolean(options?.playlist) });
+  });
+
+  // Añade uno o varios vídeos/audios (una lista = varios elementos).
+  handle('downloads:add-media', (data) => {
+    if (!data || typeof data !== 'object') throw new Error('Datos no válidos');
+    const entries = Array.isArray(data.entries) && data.entries.length ? data.entries.slice(0, 500) : [{ url: data.url, title: data.title }];
+    const created = [];
+    for (const entry of entries) {
+      if (!entry || typeof entry.url !== 'string') continue;
+      created.push(
+        manager.addMedia({
+          url: entry.url,
+          title: typeof entry.title === 'string' ? entry.title : '',
+          mode: data.mode,
+          height: data.height,
+          audioFormat: data.audioFormat,
+          audioQuality: data.audioQuality,
+          estimatedBytes: entries.length === 1 ? data.estimatedBytes : null,
+          directory: typeof data.directory === 'string' ? data.directory : '',
+          scheduledAt: data.scheduledAt,
+          startNow: data.startNow !== false,
+          source: data.source,
+        }),
+      );
+    }
+    if (typeof data.browserRequestId === 'string') ctx.takeBrowserRequest(data.browserRequestId);
+    if (!created.length) throw new Error('No hay nada que descargar.');
+    return { count: created.length, first: created[0] };
+  });
+
+  handle('media:engine-info', async () => ({ available: ctx.mediaTools.available, version: await ctx.mediaTools.version() }));
+  handle('media:update-engine', () => ctx.mediaTools.update());
+
   handle('downloads:action', async (action, ids) => {
     const list = validIds(ids);
     for (const id of list) {

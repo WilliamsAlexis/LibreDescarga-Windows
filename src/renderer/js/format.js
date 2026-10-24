@@ -64,6 +64,20 @@ export function formatDate(timestamp) {
 }
 
 /**
+ * Duración en formato de reloj: 213 -> "3:33", 3725 -> "1:02:05".
+ * @param {number|null} seconds
+ * @returns {string} Cadena vacía si no se conoce.
+ */
+export function formatDuration(seconds) {
+  if (!Number.isFinite(seconds) || seconds <= 0) return '';
+  const s = Math.round(seconds);
+  const h = Math.floor(s / 3600);
+  const m = Math.floor((s % 3600) / 60);
+  const pad = (n) => String(n).padStart(2, '0');
+  return h ? `${h}:${pad(m)}:${pad(s % 60)}` : `${m}:${pad(s % 60)}`;
+}
+
+/**
  * Fecha y hora completa: "sábado, 24 de octubre de 2026, 14:05".
  * @param {number} timestamp
  * @returns {string}

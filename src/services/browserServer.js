@@ -181,6 +181,7 @@ class BrowserServer {
           referrer: typeof payload.referrer === 'string' ? payload.referrer : '',
           cookies: typeof payload.cookies === 'string' ? payload.cookies : '',
           userAgent: typeof payload.userAgent === 'string' ? payload.userAgent : '',
+          page: payload.page === true,
         });
         return sendJson(res, 200, { ok: true, ...result });
       } catch (err) {

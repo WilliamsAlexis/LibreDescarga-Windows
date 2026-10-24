@@ -13,7 +13,7 @@
 
 import { state } from './state.js';
 import { icon } from './icons.js';
-import { formatBytes, escapeHtml, toDateTimeLocal, formatDateLong } from './format.js';
+import { formatBytes, escapeHtml, toDateTimeLocal, formatDateLong, formatDuration } from './format.js';
 import { toast, openModal, closeModal } from './ui.js';
 
 const $ = (id) => document.getElementById(id);
@@ -37,6 +37,50 @@ let probeTimer = null; // Para esperar a que el usuario deje de escribir.
 let probeCounter = 0; // Para descartar respuestas de sondeos antiguos.
 
 /**
+ * Resultado del análisis de la URL actual cuando es un vídeo o una lista
+ * (null = archivo directo o aún sin analizar). Ver mediaService.js.
+ */
+let media = null;
+let analyzing = false; // true mientras se analiza la URL (se bloquea el botón Descargar).
+let analysisFailed = false; // true si el análisis dio error.
+
+/** Sitios de vídeo conocidos: si su análisis falla no dejamos descargar la "página" como si fuera un archivo. */
+const MEDIA_SITE = /(^|\.)(youtube\.com|youtu\.be|vimeo\.com|dailymotion\.com|twitch\.tv|tiktok\.com|facebook\.com|instagram\.com|twitter\.com|x\.com|soundcloud\.com|bandcamp\.com)$/i;
+
+/** Alturas que se ofrecen en una lista (no se sabe la de cada vídeo hasta descargarlo). */
+const PLAYLIST_HEIGHTS = [2160, 1440, 1080, 720, 480, 360];
+
+/**
+ * Valor del botón de opción marcado de un grupo.
+ * @param {string} name - Atributo name de los radios.
+ * @returns {string|undefined}
+ */
+function radioValue(name) {
+  return document.querySelector(`input[name=${name}]:checked`)?.value;
+}
+
+/**
+ * Muestra u oculta el campo que solo vale para archivos directos
+ * (el nombre) y el panel de vídeo/audio.
+ * @param {'direct'|'media'} mode
+ * @returns {void}
+ */
+function setAddMode(mode) {
+  document.querySelectorAll('#form-add [data-direct-only]').forEach((el) => (el.hidden = mode === 'media'));
+  $('add-media').hidden = mode !== 'media';
+}
+
+/**
+ * Activa o desactiva los botones de descargar.
+ * @param {boolean} disabled
+ * @returns {void}
+ */
+function setAddButtonsDisabled(disabled) {
+  $('add-submit').disabled = disabled;
+  $('add-paused').disabled = disabled;
+}
+
+/**
  * Abre el diálogo "Agregar descarga", opcionalmente con datos ya rellenos.
  * @param {object} [prefill]
  * @param {string} [prefill.url]
@@ -52,46 +96,183 @@ export function openAddDialog(prefill = {}) {
   $('add-name').value = prefill.fileName || '';
   $('add-name').placeholder = 'Se detecta automáticamente';
   $('add-dir').value = '';
-  $('add-connections').value = state.settings.connections;
-  $('add-connections-value').textContent = state.settings.connections;
   $('add-schedule-at').disabled = true;
   $('add-probe').hidden = true;
+  media = null;
+  analyzing = false;
+  analysisFailed = false;
+  probeCounter++; // Descarta análisis pendientes del uso anterior del diálogo.
+  setAddMode('direct');
+  setAddButtonsDisabled(false);
   showFormError('add-error', '');
   openModal('modal-add');
   if (prefill.url) probeUrl(prefill.url);
 }
 
 /**
- * Pide al proceso principal información sobre la URL y la muestra.
+ * Analiza la URL y muestra lo que hay detrás: archivo directo, vídeo o lista.
  * @param {string} url
+ * @param {object} [options]
+ * @param {boolean} [options.playlist=false] - true = cargar la lista completa.
  * @returns {Promise<void>}
  */
-async function probeUrl(url) {
+async function probeUrl(url, { playlist = false } = {}) {
   const box = $('add-probe');
+  let parsed;
   try {
-    new URL(url); // Si no es una URL válida, no sondeamos.
+    parsed = new URL(url); // Si no es una URL válida, no analizamos.
   } catch {
     box.hidden = true;
+    media = null;
+    analyzing = false;
+    setAddMode('direct');
+    setAddButtonsDisabled(false);
     return;
   }
   const myTurn = ++probeCounter;
+  media = null;
+  analyzing = true;
+  analysisFailed = false;
+  setAddMode('direct');
+  setAddButtonsDisabled(true);
   box.className = 'probe-info';
-  box.innerHTML = `${icon('loader-circle', 16, 'spin')}<span>Obteniendo información del archivo…</span>`;
+  box.innerHTML = `${icon('loader-circle', 16, 'spin')}<span>Analizando el enlace…</span>`;
   box.hidden = false;
 
   try {
-    const info = await window.api.probeUrl(url);
+    const info = await window.api.resolveUrl(url, { playlist });
     if (myTurn !== probeCounter) return; // Llegó tarde: el usuario ya cambió la URL.
-    const resumeTag = info.resumable
-      ? `<span class="tag">Reanudable · descarga por partes</span>`
-      : `<span class="tag no">Sin reanudación · 1 conexión</span>`;
-    box.innerHTML = `${icon('file-check', 16)}<span><strong>${escapeHtml(info.fileName)}</strong> · ${formatBytes(info.totalBytes)}</span>${resumeTag}`;
-    $('add-name').placeholder = info.fileName;
+    analyzing = false;
+    setAddButtonsDisabled(false);
+
+    if (info.kind === 'direct') {
+      const resumeTag = info.resumable
+        ? `<span class="tag">Reanudable · descarga por partes</span>`
+        : `<span class="tag no">Sin reanudación · 1 conexión</span>`;
+      box.innerHTML = `${icon('file-check', 16)}<span><strong>${escapeHtml(info.fileName)}</strong> · ${formatBytes(info.totalBytes)}</span>${resumeTag}`;
+      $('add-name').placeholder = info.fileName;
+      return;
+    }
+
+    media = info;
+    box.hidden = true;
+    renderMedia(info);
   } catch (err) {
     if (myTurn !== probeCounter) return;
+    analyzing = false;
+    analysisFailed = true;
     box.className = 'probe-info error';
     box.innerHTML = `${icon('circle-alert', 16)}<span>${escapeHtml(err.message)}</span>`;
+    // Una página de vídeo no se puede descargar como si fuera un archivo.
+    setAddButtonsDisabled(MEDIA_SITE.test(parsed.hostname));
   }
+}
+
+/**
+ * Pinta las opciones de un vídeo o de una lista.
+ * @param {object} info - Resultado de resolveUrl (kind 'video' o 'playlist').
+ * @returns {void}
+ */
+function renderMedia(info) {
+  setAddMode('media');
+  const isList = info.kind === 'playlist';
+
+  // --- Tarjeta con miniatura y datos ---
+  const thumb = $('media-thumb');
+  thumb.hidden = !info.thumbnail;
+  if (info.thumbnail) thumb.src = info.thumbnail;
+  $('media-title').textContent = info.title;
+  const bits = isList
+    ? [info.uploader, `${info.count} vídeos`]
+    : [info.uploader, formatDuration(info.duration)];
+  $('media-meta').textContent = bits.filter(Boolean).join(' · ');
+
+  // --- Aviso: "este vídeo también está en una lista" ---
+  $('media-playlist-hint').hidden = isList || !info.hasPlaylist;
+
+  // --- Lista de elementos con casillas ---
+  $('media-list').hidden = !isList;
+  if (isList) {
+    $('media-entries').innerHTML = info.entries
+      .map(
+        (e, i) => `<label class="media-entry">
+          <input type="checkbox" data-index="${i}" checked />
+          <span class="entry-title" title="${escapeHtml(e.title)}">${escapeHtml(e.title)}</span>
+          <span class="entry-duration">${formatDuration(e.duration)}</span>
+        </label>`,
+      )
+      .join('');
+  }
+
+  // --- Calidades de vídeo ---
+  // Cada calidad es un botón de opción; la primera (la mejor) viene marcada.
+  // Si hay muchas (hasta 8), se reparten en varias filas.
+  const chip = (value, label, small = '', bytes = '') =>
+    `<label class="opt"><input type="radio" name="media-height" value="${value}" data-bytes="${bytes}" /><span>${label}${small ? ` <small>${small}</small>` : ''}</span></label>`;
+  let chips = '';
+  if (isList) {
+    chips = chip('', 'La mejor') + PLAYLIST_HEIGHTS.map((h) => chip(h, `${h}p`, 'si existe')).join('');
+  } else if (info.hasVideo) {
+    chips = info.heights.length
+      ? info.heights.map((h, i) => chip(h.height, i === 0 ? `${h.label} · la mejor` : h.label, h.approxBytes ? `~${formatBytes(h.approxBytes)}` : '', h.approxBytes || '')).join('')
+      : chip('', 'La mejor disponible');
+  }
+  $('media-height-group').innerHTML = chips;
+  const firstQuality = document.querySelector('input[name=media-height]');
+  if (firstQuality) firstQuality.checked = true;
+
+  // Si solo es audio (p. ej. SoundCloud), no se ofrece vídeo.
+  const videoRadio = document.querySelector('input[name=media-mode][value=video]');
+  const audioRadio = document.querySelector('input[name=media-mode][value=audio]');
+  videoRadio.disabled = !isList && !info.hasVideo;
+  (videoRadio.disabled ? audioRadio : videoRadio).checked = true;
+  // Por defecto, en YouTube Music y similares tiene más sentido el audio.
+  if (!videoRadio.disabled && /music\.youtube\.com/i.test(info.url || '')) audioRadio.checked = true;
+  updateMediaMode();
+}
+
+/**
+ * Muestra las opciones de vídeo o de audio según lo elegido y actualiza el botón.
+ * @returns {void}
+ */
+function updateMediaMode() {
+  const mode = document.querySelector('input[name=media-mode]:checked')?.value || 'video';
+  $('media-video-opts').hidden = mode !== 'video';
+  $('media-audio-opts').hidden = mode !== 'audio';
+  $('media-audio-quality-field').hidden = radioValue('media-audio-format') === 'opus'; // OPUS no usa kbps.
+  updateMediaButton();
+}
+
+/**
+ * Ajusta el texto del botón principal ("Descargar", "Descargar 5 vídeos"...).
+ * @returns {void}
+ */
+function updateMediaButton() {
+  if (!media) return;
+  const label = $('add-submit').lastElementChild;
+  if ($('add-schedule-on').checked) {
+    label.textContent = 'Programar';
+    return;
+  }
+  if (media.kind === 'playlist') {
+    const n = selectedEntries().length;
+    const noun = document.querySelector('input[name=media-mode]:checked')?.value === 'audio' ? 'canciones' : 'vídeos';
+    label.textContent = n ? `Descargar ${n} ${n === 1 ? noun.slice(0, -1) : noun}` : 'Descargar';
+    $('add-submit').disabled = n === 0 || analyzing;
+    $('add-paused').disabled = n === 0 || analyzing;
+    $('media-list-count').textContent = `${n} de ${media.count} seleccionados`;
+  } else {
+    label.textContent = 'Descargar';
+  }
+}
+
+/**
+ * Elementos marcados de la lista.
+ * @returns {Array<{url:string, title:string}>}
+ */
+function selectedEntries() {
+  if (media?.kind !== 'playlist') return [];
+  return [...document.querySelectorAll('#media-entries input:checked')].map((box) => media.entries[Number(box.dataset.index)]);
 }
 
 /**
@@ -101,17 +282,10 @@ async function probeUrl(url) {
  */
 async function submitAdd(startNow) {
   showFormError('add-error', '');
+  if (analyzing) return; // Aún no sabemos qué es el enlace.
   const form = $('form-add');
-  const data = {
-    url: $('add-url').value.trim(),
-    fileName: $('add-name').value.trim(),
-    directory: $('add-dir').value.trim(),
-    connections: Number($('add-connections').value),
-    expectedHash: $('add-hash').value.trim(),
-    startNow,
-    browserRequestId: form.dataset.browserRequestId || undefined,
-    source: form.dataset.browserRequestId ? 'browser' : 'manual',
-  };
+  const browserRequestId = form.dataset.browserRequestId || undefined;
+  let scheduledAt;
 
   if ($('add-schedule-on').checked) {
     const when = new Date($('add-schedule-at').value).getTime();
@@ -119,10 +293,23 @@ async function submitAdd(startNow) {
       showFormError('add-error', 'Elige una fecha y hora futuras para programar la descarga.');
       return;
     }
-    data.scheduledAt = when;
+    scheduledAt = when;
   }
 
   try {
+    if (media) {
+      await submitMedia({ startNow, scheduledAt, browserRequestId });
+      return;
+    }
+    const data = {
+      url: $('add-url').value.trim(),
+      fileName: $('add-name').value.trim(),
+      directory: $('add-dir').value.trim(),
+      startNow,
+      browserRequestId,
+      source: browserRequestId ? 'browser' : 'manual',
+      scheduledAt,
+    };
     const item = await window.api.addDownload(data);
     closeModal('modal-add');
     const text = item.status === 'scheduled' ? `Empezará el ${formatDateLong(item.scheduledAt)}` : item.fileName;
@@ -130,6 +317,50 @@ async function submitAdd(startNow) {
   } catch (err) {
     showFormError('add-error', err.message);
   }
+}
+
+/**
+ * Añade el vídeo/audio (o los elegidos de una lista) con las opciones del formulario.
+ * @param {object} extra
+ * @param {boolean} extra.startNow
+ * @param {number} [extra.scheduledAt]
+ * @param {string} [extra.browserRequestId]
+ * @returns {Promise<void>}
+ */
+async function submitMedia({ startNow, scheduledAt, browserRequestId }) {
+  const mode = document.querySelector('input[name=media-mode]:checked')?.value === 'audio' ? 'audio' : 'video';
+  const heightOption = document.querySelector('input[name=media-height]:checked');
+  const data = {
+    mode,
+    height: mode === 'video' && heightOption?.value ? Number(heightOption.value) : null,
+    audioFormat: radioValue('media-audio-format') || 'mp3',
+    audioQuality: Number(radioValue('media-audio-quality')) || 0,
+    directory: $('add-dir').value.trim(),
+    startNow,
+    scheduledAt,
+    browserRequestId,
+    source: browserRequestId ? 'browser' : 'manual',
+  };
+
+  if (media.kind === 'playlist') {
+    data.entries = selectedEntries().map((e) => ({ url: e.url, title: e.title }));
+    if (!data.entries.length) throw new Error('Marca al menos un vídeo de la lista.');
+  } else {
+    data.url = media.url;
+    data.title = media.title;
+    // Tamaño aproximado para que el porcentaje sea fiable desde el principio.
+    data.estimatedBytes = mode === 'audio' ? media.audioApproxBytes : Number(heightOption?.dataset.bytes) || null;
+  }
+
+  const result = await window.api.addMedia(data);
+  closeModal('modal-add');
+  const many = result.count > 1;
+  toast({
+    title: scheduledAt ? 'Descarga programada' : many ? `${result.count} descargas añadidas` : 'Descarga añadida',
+    text: many ? media.title : result.first.fileName,
+    type: 'success',
+    duration: 3000,
+  });
 }
 
 /** Conecta los eventos del diálogo "Agregar descarga". */
@@ -158,15 +389,29 @@ function setupAddDialog() {
     }
   });
 
-  $('add-connections').addEventListener('input', (e) => ($('add-connections-value').textContent = e.target.value));
-
   $('add-schedule-on').addEventListener('change', (e) => {
     const input = $('add-schedule-at');
     input.disabled = !e.target.checked;
     if (e.target.checked && !input.value) input.value = toDateTimeLocal(new Date(Date.now() + 3600_000));
     // Si se programa, el botón principal cambia de texto.
     $('add-submit').lastElementChild.textContent = e.target.checked ? 'Programar' : 'Descargar';
+    updateMediaButton();
   });
+
+  // --- Vídeo y audio ---
+  document.querySelectorAll('input[name=media-mode]').forEach((r) => r.addEventListener('change', updateMediaMode));
+  $('media-audio-opts').addEventListener('change', updateMediaMode);
+  $('media-entries').addEventListener('change', updateMediaButton);
+  $('media-select-all').addEventListener('click', () => {
+    document.querySelectorAll('#media-entries input').forEach((box) => (box.checked = true));
+    updateMediaButton();
+  });
+  $('media-select-none').addEventListener('click', () => {
+    document.querySelectorAll('#media-entries input').forEach((box) => (box.checked = false));
+    updateMediaButton();
+  });
+  // "Ver la lista completa": vuelve a analizar el enlace como lista.
+  $('media-load-playlist').addEventListener('click', () => probeUrl($('add-url').value.trim(), { playlist: true }));
 
   $('form-add').addEventListener('submit', (event) => {
     event.preventDefault(); // Evita que el formulario recargue la página.
@@ -235,7 +480,24 @@ function setupScheduleDialog() {
 /* ===================================================================== */
 
 /**
- * Cambia la pestaña visible de la configuración.
+ * Pide la versión del motor de vídeo y la muestra en Configuración.
+ * @returns {Promise<void>}
+ */
+async function loadEngineInfo() {
+  const box = $('engine-text');
+  box.textContent = 'Comprobando…';
+  try {
+    const info = await window.api.engineInfo();
+    box.textContent = info.available
+      ? `yt-dlp ${info.version || '(versión desconocida)'} · ffmpeg incluido`
+      : 'No se encontraron yt-dlp/ffmpeg. Reinstala la aplicación o ejecuta "npm run tools".';
+  } catch (err) {
+    box.textContent = err.message;
+  }
+}
+
+/**
+ * Cambia de pestaña en Configuración.
  * @param {string} tab - data-tab de la pestaña.
  * @returns {void}
  */
@@ -320,7 +582,10 @@ export function openSettingsDialog(tab = 'general') {
   $('set-notifications').checked = s.notifications;
   $('set-clipboard').checked = s.clipboardWatch;
   $('set-auto-update').checked = s.autoUpdateCheck;
+  document.querySelectorAll('input[name=accent]').forEach((r) => (r.checked = r.value === (s.accent || 'blue')));
+  $('set-cookies-browser').value = s.cookiesBrowser || '';
   renderUpdateStatus();
+  loadEngineInfo();
   $('set-server-enabled').checked = s.serverEnabled;
   $('set-server-port').value = s.serverPort;
   $('set-server-token').value = s.serverToken;
@@ -377,6 +642,15 @@ function setupSettingsDialog() {
     }
   });
 
+  // Color de la aplicación: se aplica y guarda al momento (el evento 'settings:changed' lo pinta).
+  $('accent-swatches').addEventListener('change', async (event) => {
+    try {
+      await window.api.saveSettings({ accent: event.target.value });
+    } catch (err) {
+      toast({ title: 'No se pudo cambiar el color', text: err.message, type: 'error' });
+    }
+  });
+
   // Botones de actualización. Los cambios de estado llegan por el evento 'update:status'.
   const updateAction = (id, call) => $(id).addEventListener('click', async () => {
     try {
@@ -388,6 +662,21 @@ function setupSettingsDialog() {
   updateAction('upd-check', () => window.api.checkUpdate());
   updateAction('upd-download', () => window.api.downloadUpdate());
   updateAction('upd-install', () => window.api.installUpdate());
+
+  // Motor de vídeo (yt-dlp): actualizar a la última versión.
+  $('engine-update').addEventListener('click', async () => {
+    const button = $('engine-update');
+    button.disabled = true;
+    $('engine-text').textContent = 'Actualizando… (puede tardar un minuto)';
+    try {
+      const result = await window.api.updateEngine();
+      toast({ title: result.message, type: 'success', duration: 3500 });
+    } catch (err) {
+      toast({ title: 'No se pudo actualizar el motor', text: err.message, type: 'error' });
+    }
+    button.disabled = false;
+    loadEngineInfo();
+  });
 
   $('set-open-extension').addEventListener('click', async () => {
     try {
@@ -413,6 +702,7 @@ function setupSettingsDialog() {
       notifications: $('set-notifications').checked,
       clipboardWatch: $('set-clipboard').checked,
       autoUpdateCheck: $('set-auto-update').checked,
+      cookiesBrowser: $('set-cookies-browser').value,
       serverEnabled: $('set-server-enabled').checked,
       serverPort: Number($('set-server-port').value),
       browserConfirm: $('set-browser-confirm').checked,

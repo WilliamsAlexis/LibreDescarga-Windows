@@ -172,7 +172,12 @@ function subText(item) {
     host = item.url;
   }
   const parts = [host];
-  if (item.probed) parts.push(item.resumable ? `${item.segments.length} ${item.segments.length === 1 ? 'conexión' : 'conexiones'}` : 'sin reanudación');
+  if (item.kind === 'media') {
+    // Vídeo o audio de una página: mostramos lo elegido en vez de las conexiones.
+    const m = item.media || {};
+    if (m.mode === 'audio') parts.push(`${(m.audioFormat || 'mp3').toUpperCase()}${m.audioQuality ? ` · ${m.audioQuality} kbps` : ''}`);
+    else parts.push(m.height ? `MP4 · hasta ${m.height}p` : 'MP4 · mejor calidad');
+  } else if (item.probed) parts.push(item.resumable ? `${item.segments.length} ${item.segments.length === 1 ? 'conexión' : 'conexiones'}` : 'sin reanudación');
   if (item.source === 'browser') parts.push('desde el navegador');
   return parts.join(' · ');
 }
@@ -302,6 +307,15 @@ function renderDetails() {
     ${item.error ? row('Error', item.error, 'detail-wide') : ''}
     ${segments ? `<div class="detail-row detail-wide"><div class="detail-label">Conexiones (${item.segments.length})</div><div class="segments">${segments}</div></div>` : ''}`;
   panel.hidden = false;
+}
+
+/**
+ * Aplica el color de la aplicación (el CSS lee el atributo data-accent).
+ * @param {string} accent - 'blue', 'green', 'red'...
+ * @returns {void}
+ */
+function applyAccent(accent) {
+  document.documentElement.dataset.accent = accent || 'blue';
 }
 
 /**
@@ -609,6 +623,7 @@ function setupLiveEvents() {
 
   api.on('settings:changed', (settings) => {
     state.settings = settings;
+    applyAccent(settings.accent);
     renderStatusbar();
   });
 
@@ -707,6 +722,7 @@ async function init() {
   try {
     const initial = await api.getState();
     state.settings = initial.settings;
+    applyAccent(initial.settings.accent);
     state.categories = initial.categories;
     state.server = initial.server;
     state.stats = initial.stats;

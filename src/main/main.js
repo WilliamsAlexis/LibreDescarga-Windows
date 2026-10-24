@@ -29,6 +29,8 @@ const { SpeedLimiter } = require('../services/speedLimiter');
 const { Scheduler } = require('../services/scheduler');
 const { BrowserServer } = require('../services/browserServer');
 const { Updater } = require('../services/updater');
+const { MediaTools } = require('../services/mediaTools');
+const { MediaService } = require('../services/mediaService');
 const { formatBytes, formatSpeed } = require('../utils/format');
 
 // Herramienta de desarrollo: permite usar otra carpeta de datos (ver selfTest.js).
@@ -50,6 +52,7 @@ const state = {
   scheduler: null,
   updater: null,
   updateTimer: null,
+  engineTimer: null,
   server: null,
   serverError: null,
   clipboardWatcher: null,
@@ -235,7 +238,8 @@ async function handleBrowserDownload(payload) {
   if (payload.cookies) headers.Cookie = payload.cookies;
   if (payload.userAgent) headers['User-Agent'] = payload.userAgent;
 
-  if (getSettings().browserConfirm) {
+  // Las páginas de vídeo (payload.page) SIEMPRE pasan por el diálogo: hay que elegir calidad o formato.
+  if (payload.page || getSettings().browserConfirm) {
     // Mostramos el diálogo "Agregar descarga" relleno. Las cabeceras se quedan
     // aquí guardadas con un id; la interfaz solo recibe el id.
     const requestId = crypto.randomUUID();
@@ -311,6 +315,7 @@ async function shutdown() {
   try {
     clearInterval(state.statsTimer);
     clearTimeout(state.updateTimer);
+    clearTimeout(state.engineTimer);
     state.scheduler?.stop();
     state.clipboardWatcher?.stop();
     await state.server?.stop();
@@ -337,10 +342,19 @@ async function bootstrap() {
   state.stores = createStores(app.getPath('downloads'));
   nativeTheme.themeSource = getSettings().theme;
 
+  // Herramientas de vídeo/audio (yt-dlp + ffmpeg). Se copia yt-dlp a una carpeta escribible para poder actualizarlo.
+  state.mediaTools = new MediaTools({
+    bundledDir: app.isPackaged ? path.join(process.resourcesPath, 'tools') : path.join(__dirname, '../../tools'),
+    userDir: path.join(app.getPath('userData'), 'tools'),
+  });
+  await state.mediaTools.prepare();
+  state.media = new MediaService({ tools: state.mediaTools, getSettings });
+
   state.manager = new DownloadManager({
     storage: state.stores.downloadsStorage,
     getSettings,
     limiter: new SpeedLimiter(),
+    mediaTools: state.mediaTools,
   });
   state.manager.init();
 
@@ -367,6 +381,8 @@ async function bootstrap() {
   state.updater.on('status', (status) => send('update:status', status));
 
   registerIpc({
+    media: state.media,
+    mediaTools: state.mediaTools,
     updater: state.updater,
     installUpdate,
     manager: state.manager,
@@ -420,6 +436,11 @@ async function bootstrap() {
       if (getSettings().autoUpdateCheck) state.updater.check();
     }, 15000);
   }
+
+  // yt-dlp se rompe cuando YouTube cambia; lo actualizamos en silencio (como mucho cada 3 días).
+  state.engineTimer = setTimeout(() => {
+    if (getSettings().autoUpdateCheck && app.isPackaged) state.mediaTools.autoUpdate();
+  }, 45000);
 }
 
 // Solo una instancia: si ya hay una abierta, le pedimos que se muestre y salimos.

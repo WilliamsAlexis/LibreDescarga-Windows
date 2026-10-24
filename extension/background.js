@@ -59,6 +59,7 @@ async function sendAndReport(data) {
 chrome.runtime.onInstalled.addListener(() => {
   chrome.contextMenus.removeAll(() => {
     chrome.contextMenus.create({ id: 'ld-link', title: 'Descargar enlace con LibreDescarga', contexts: ['link'] });
+    chrome.contextMenus.create({ id: 'ld-page', title: 'Descargar vídeo o audio de esta página con LibreDescarga', contexts: ['page', 'frame'] });
     chrome.contextMenus.create({
       id: 'ld-media',
       title: 'Descargar con LibreDescarga',
@@ -72,6 +73,13 @@ chrome.runtime.onInstalled.addListener(() => {
 });
 
 chrome.contextMenus.onClicked.addListener((info, tab) => {
+  // Página de vídeo: la app la analiza y deja elegir calidad, formato o lista.
+  if (info.menuItemId === 'ld-page') {
+    const pageUrl = info.pageUrl || tab?.url || '';
+    if (!/^https?:/i.test(pageUrl)) return notify('Página no compatible', 'Solo se pueden analizar páginas http:// o https://');
+    sendAndReport({ url: pageUrl, referrer: pageUrl, page: true });
+    return;
+  }
   const url = info.menuItemId === 'ld-link' ? info.linkUrl : info.srcUrl;
   if (!url || !/^https?:/i.test(url)) {
     notify('Enlace no compatible', 'Solo se pueden enviar enlaces http:// o https://');
