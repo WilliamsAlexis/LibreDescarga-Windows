@@ -1,0 +1,51 @@
+<!doctype html>
+<!--
+  options.html (extensión)
+  Página de opciones: aquí el usuario escribe el puerto y el token que
+  aparecen en LibreDescarga > Configuración > Navegador.
+-->
+<html lang="es">
+  <head>
+    <meta charset="UTF-8" />
+    <title>Opciones de LibreDescarga</title>
+    <link rel="stylesheet" href="ui.css" />
+  </head>
+  <body class="options">
+    <main class="card">
+      <header class="head">
+        <img src="icons/icon48.png" alt="" width="36" height="36" />
+        <div>
+          <div class="title">Opciones de LibreDescarga</div>
+          <div class="muted">Conecta la extensión con la aplicación de escritorio.</div>
+        </div>
+      </header>
+
+      <ol class="steps">
+        <li>Abre LibreDescarga y ve a <strong>Configuración → Navegador</strong>.</li>
+        <li>Copia el <strong>puerto</strong> y el <strong>token</strong> y pégalos aquí.</li>
+      </ol>
+
+      <form id="form">
+        <label class="field">
+          <span>Puerto local</span>
+          <input id="port" type="number" min="1024" max="65535" required />
+        </label>
+        <label class="field">
+          <span>Token de seguridad</span>
+          <input id="token" type="text" spellcheck="false" required placeholder="Pega aquí el token" />
+        </label>
+        <label class="switch-row">
+          <input type="checkbox" id="intercept" />
+          <span>Capturar automáticamente las descargas del navegador</span>
+        </label>
+        <div class="actions">
+          <button type="button" class="btn" id="test">Probar conexión</button>
+          <button type="submit" class="btn primary">Guardar</button>
+        </div>
+        <div class="message" id="message"></div>
+      </form>
+    </main>
+    <script src="common.js"></script>
+    <script src="options.js"></script>
+  </body>
+</html>

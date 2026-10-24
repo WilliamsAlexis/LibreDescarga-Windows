@@ -1,0 +1,39 @@
+<!doctype html>
+<!--
+  popup.html (extensión)
+  Ventana que aparece al pulsar el icono de LibreDescarga en el navegador:
+  muestra si la app está conectada y lista los enlaces descargables de la
+  página actual para enviarlos con un clic.
+-->
+<html lang="es">
+  <head>
+    <meta charset="UTF-8" />
+    <link rel="stylesheet" href="ui.css" />
+  </head>
+  <body class="popup">
+    <header class="head">
+      <img src="icons/icon48.png" alt="" width="28" height="28" />
+      <div>
+        <div class="title">LibreDescarga</div>
+        <div class="status" id="status"><span class="dot"></span> Comprobando…</div>
+      </div>
+      <button class="icon" id="open-options" title="Opciones">⚙</button>
+    </header>
+
+    <label class="switch-row">
+      <input type="checkbox" id="intercept" />
+      <span>Capturar las descargas del navegador</span>
+    </label>
+
+    <section>
+      <div class="section-head">
+        <strong>Enlaces descargables en esta página</strong>
+        <button class="btn small" id="send-all" disabled>Enviar todos</button>
+      </div>
+      <ul class="links" id="links"><li class="muted">Buscando enlaces…</li></ul>
+    </section>
+
+    <script src="common.js"></script>
+    <script src="popup.js"></script>
+  </body>
+</html>

@@ -1,0 +1,375 @@
+<!doctype html>
+<!--
+  index.html
+  -----------------------------------------------------------------------------
+  ESTRUCTURA de la interfaz. Aquí solo hay el "esqueleto" (HTML): los estilos
+  están en styles.css y el comportamiento en js/app.js.
+
+  Partes principales:
+    - Barra de herramientas superior (toolbar)
+    - Barra lateral con filtros por estado y por categoría (sidebar)
+    - Tabla de descargas + panel de detalles
+    - Barra de estado inferior
+    - Diálogos (modales): Agregar descarga, Programar, Configuración, Confirmar
+  -----------------------------------------------------------------------------
+-->
+<html lang="es">
+  <head>
+    <meta charset="UTF-8" />
+    <!--
+      Content-Security-Policy: solo permitimos cargar scripts y recursos de la
+      propia aplicación ('self'). Es una defensa extra contra código inyectado.
+    -->
+    <meta
+      http-equiv="Content-Security-Policy"
+      content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; connect-src 'none'; object-src 'none'; base-uri 'none'"
+    />
+    <title>LibreDescarga</title>
+    <link rel="stylesheet" href="styles.css" />
+    <!-- Iconos Lucide (versión UMD local, sin internet). Expone window.lucide -->
+    <script src="../../node_modules/lucide/dist/umd/lucide.min.js"></script>
+    <!-- type="module" permite usar import/export entre nuestros archivos JS -->
+    <script type="module" src="js/app.js"></script>
+  </head>
+  <body>
+    <!-- ===================== BARRA DE HERRAMIENTAS ===================== -->
+    <header class="toolbar">
+      <div class="brand">
+        <img src="../../assets/icon.png" alt="" class="brand-logo" />
+        <span class="brand-name">LibreDescarga</span>
+      </div>
+
+      <div class="toolbar-actions">
+        <button class="btn btn-primary" id="btn-add" title="Agregar URL (Ctrl+N)">
+          <span data-icon="plus"></span><span>Agregar URL</span>
+        </button>
+        <div class="toolbar-sep"></div>
+        <button class="tool-btn" id="btn-resume" title="Reanudar selección" disabled>
+          <span data-icon="play"></span><span>Reanudar</span>
+        </button>
+        <button class="tool-btn" id="btn-pause" title="Pausar selección" disabled>
+          <span data-icon="pause"></span><span>Pausar</span>
+        </button>
+        <button class="tool-btn" id="btn-cancel" title="Cancelar selección" disabled>
+          <span data-icon="square"></span><span>Cancelar</span>
+        </button>
+        <button class="tool-btn" id="btn-delete" title="Quitar de la lista (Supr)" disabled>
+          <span data-icon="trash-2"></span><span>Eliminar</span>
+        </button>
+        <div class="toolbar-sep"></div>
+        <button class="tool-btn" id="btn-resume-all" title="Reanudar todas">
+          <span data-icon="play-circle"></span><span>Reanudar todo</span>
+        </button>
+        <button class="tool-btn" id="btn-pause-all" title="Pausar todas">
+          <span data-icon="pause-circle"></span><span>Pausar todo</span>
+        </button>
+        <button class="tool-btn" id="btn-schedule" title="Programar selección" disabled>
+          <span data-icon="alarm-clock"></span><span>Programar</span>
+        </button>
+      </div>
+
+      <div class="toolbar-right">
+        <label class="search">
+          <span data-icon="search" data-size="16"></span>
+          <input id="search" type="search" placeholder="Buscar por nombre o URL…" autocomplete="off" />
+        </label>
+        <button class="icon-btn" id="btn-theme" title="Cambiar tema"><span data-icon="sun-moon"></span></button>
+        <button class="icon-btn" id="btn-settings" title="Configuración"><span data-icon="settings"></span></button>
+      </div>
+    </header>
+
+    <!-- ===================== CUERPO: barra lateral + contenido ===================== -->
+    <div class="layout">
+      <aside class="sidebar">
+        <div class="sidebar-section">
+          <div class="sidebar-title">Descargas</div>
+          <nav id="status-nav" class="nav-list"></nav>
+        </div>
+        <div class="sidebar-section">
+          <div class="sidebar-title">Categorías</div>
+          <nav id="category-nav" class="nav-list"></nav>
+        </div>
+        <div class="sidebar-footer">
+          <button class="link-btn" id="btn-clear-completed">
+            <span data-icon="list-x" data-size="15"></span> Limpiar completadas
+          </button>
+        </div>
+      </aside>
+
+      <main class="content">
+        <div class="content-header">
+          <div>
+            <h1 id="view-title">Todas las descargas</h1>
+            <div id="view-subtitle" class="muted small"></div>
+          </div>
+          <div id="active-filters" class="chips"></div>
+        </div>
+
+        <div class="table-wrap" id="table-wrap">
+          <table class="downloads">
+            <thead>
+              <tr>
+                <th data-sort="fileName" class="col-name">Nombre</th>
+                <th data-sort="totalBytes" class="col-size">Tamaño</th>
+                <th data-sort="progress" class="col-progress">Progreso</th>
+                <th data-sort="speed" class="col-speed">Velocidad</th>
+                <th data-sort="eta" class="col-eta">Restante</th>
+                <th data-sort="status" class="col-status">Estado</th>
+                <th data-sort="createdAt" class="col-date">Añadida</th>
+              </tr>
+            </thead>
+            <tbody id="downloads-body"></tbody>
+          </table>
+
+          <!-- Se muestra cuando no hay descargas que enseñar -->
+          <div class="empty" id="empty-state" hidden>
+            <div class="empty-icon"><span data-icon="cloud-download" data-size="44"></span></div>
+            <h2>No hay descargas aquí</h2>
+            <p class="muted">Pega una URL con <kbd>Ctrl</kbd>+<kbd>N</kbd>, arrastra un enlace a la ventana o copia un enlace de descarga.</p>
+            <button class="btn btn-primary" id="btn-add-empty"><span data-icon="plus"></span><span>Agregar URL</span></button>
+          </div>
+        </div>
+
+        <!-- Panel de detalles de la descarga seleccionada -->
+        <section class="details" id="details" hidden></section>
+      </main>
+    </div>
+
+    <!-- ===================== BARRA DE ESTADO ===================== -->
+    <footer class="statusbar">
+      <span class="status-item"><span data-icon="arrow-down-to-line" data-size="14"></span> <strong id="sb-speed">0 B/s</strong></span>
+      <span class="status-item" id="sb-active">0 activas · 0 en cola</span>
+      <span class="status-item" id="sb-limit"></span>
+      <span class="spacer"></span>
+      <span class="status-item" id="sb-server"></span>
+      <span class="status-item muted" id="sb-version"></span>
+    </footer>
+
+    <!-- ===================== MENÚ CONTEXTUAL (clic derecho) ===================== -->
+    <div class="context-menu" id="context-menu" hidden></div>
+
+    <!-- ===================== AVISOS (toasts) ===================== -->
+    <div class="toasts" id="toasts"></div>
+
+    <!-- ===================== DIÁLOGO: AGREGAR DESCARGA ===================== -->
+    <div class="modal-backdrop" id="modal-add" hidden>
+      <form class="modal" id="form-add" autocomplete="off">
+        <div class="modal-header">
+          <h2><span data-icon="download"></span> Agregar descarga</h2>
+          <button type="button" class="icon-btn" data-close title="Cerrar"><span data-icon="x"></span></button>
+        </div>
+        <div class="modal-body">
+          <label class="field">
+            <span class="field-label">URL del archivo</span>
+            <div class="input-group">
+              <input id="add-url" type="url" required placeholder="https://ejemplo.com/archivo.zip" />
+              <button type="button" class="btn" id="add-paste" title="Pegar del portapapeles"><span data-icon="clipboard-paste"></span></button>
+            </div>
+          </label>
+          <div class="probe-info" id="add-probe" hidden></div>
+
+          <div class="grid-2">
+            <label class="field">
+              <span class="field-label">Nombre del archivo <span class="muted">(opcional)</span></span>
+              <input id="add-name" type="text" placeholder="Se detecta automáticamente" />
+            </label>
+            <label class="field">
+              <span class="field-label">Carpeta <span class="muted">(opcional)</span></span>
+              <div class="input-group">
+                <input id="add-dir" type="text" placeholder="Automática según la categoría" />
+                <button type="button" class="btn" id="add-browse" title="Elegir carpeta"><span data-icon="folder-open"></span></button>
+              </div>
+            </label>
+          </div>
+
+          <label class="field">
+            <span class="field-label">Conexiones simultáneas: <strong id="add-connections-value">8</strong></span>
+            <input id="add-connections" type="range" min="1" max="16" value="8" />
+          </label>
+
+          <label class="field">
+            <span class="field-label">SHA-256 esperado <span class="muted">(opcional, para verificar la integridad)</span></span>
+            <input id="add-hash" type="text" spellcheck="false" placeholder="64 caracteres hexadecimales" />
+          </label>
+
+          <div class="field">
+            <label class="check">
+              <input id="add-schedule-on" type="checkbox" />
+              <span>Programar para más tarde</span>
+            </label>
+            <input id="add-schedule-at" type="datetime-local" disabled />
+          </div>
+          <div class="form-error" id="add-error" hidden></div>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn" data-close>Cancelar</button>
+          <button type="button" class="btn" id="add-paused">Añadir en pausa</button>
+          <button type="submit" class="btn btn-primary" id="add-submit"><span data-icon="download"></span><span>Descargar</span></button>
+        </div>
+      </form>
+    </div>
+
+    <!-- ===================== DIÁLOGO: PROGRAMAR ===================== -->
+    <div class="modal-backdrop" id="modal-schedule" hidden>
+      <form class="modal modal-sm" id="form-schedule">
+        <div class="modal-header">
+          <h2><span data-icon="alarm-clock"></span> Programar descarga</h2>
+          <button type="button" class="icon-btn" data-close title="Cerrar"><span data-icon="x"></span></button>
+        </div>
+        <div class="modal-body">
+          <p class="muted" id="schedule-summary"></p>
+          <label class="field">
+            <span class="field-label">Empezar el</span>
+            <input id="schedule-at" type="datetime-local" required />
+          </label>
+          <div class="quick-buttons">
+            <button type="button" class="chip-btn" data-quick="30">En 30 min</button>
+            <button type="button" class="chip-btn" data-quick="60">En 1 hora</button>
+            <button type="button" class="chip-btn" data-quick="night">Esta noche (02:00)</button>
+          </div>
+          <div class="form-error" id="schedule-error" hidden></div>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn" data-close>Cancelar</button>
+          <button type="submit" class="btn btn-primary">Programar</button>
+        </div>
+      </form>
+    </div>
+
+    <!-- ===================== DIÁLOGO: CONFIGURACIÓN ===================== -->
+    <div class="modal-backdrop" id="modal-settings" hidden>
+      <form class="modal modal-lg" id="form-settings">
+        <div class="modal-header">
+          <h2><span data-icon="settings"></span> Configuración</h2>
+          <button type="button" class="icon-btn" data-close title="Cerrar"><span data-icon="x"></span></button>
+        </div>
+        <div class="settings-layout">
+          <nav class="tabs" id="settings-tabs">
+            <button type="button" class="tab active" data-tab="general"><span data-icon="folder"></span> Carpetas</button>
+            <button type="button" class="tab" data-tab="connections"><span data-icon="gauge"></span> Conexiones</button>
+            <button type="button" class="tab" data-tab="appearance"><span data-icon="palette"></span> Apariencia</button>
+            <button type="button" class="tab" data-tab="browser"><span data-icon="globe"></span> Navegador</button>
+            <button type="button" class="tab" data-tab="updates"><span data-icon="refresh-cw"></span> Actualizaciones</button>
+          </nav>
+          <div class="modal-body tab-panels">
+            <!-- Carpetas -->
+            <section class="tab-panel" data-panel="general">
+              <label class="field">
+                <span class="field-label">Carpeta de descargas por defecto</span>
+                <div class="input-group">
+                  <input id="set-download-dir" type="text" required />
+                  <button type="button" class="btn" data-browse="set-download-dir"><span data-icon="folder-open"></span></button>
+                </div>
+                <span class="hint">Cada categoría usa una subcarpeta dentro de esta, salvo que indiques otra abajo.</span>
+              </label>
+              <div class="field-label">Carpeta por categoría</div>
+              <div id="set-category-dirs" class="category-dirs"></div>
+            </section>
+
+            <!-- Conexiones -->
+            <section class="tab-panel" data-panel="connections" hidden>
+              <label class="field">
+                <span class="field-label">Conexiones por descarga: <strong id="set-connections-value"></strong></span>
+                <input id="set-connections" type="range" min="1" max="16" />
+                <span class="hint">Más conexiones suelen acelerar la descarga si el servidor lo permite.</span>
+              </label>
+              <div class="grid-2">
+                <label class="field">
+                  <span class="field-label">Descargas simultáneas</span>
+                  <input id="set-max-concurrent" type="number" min="1" max="10" required />
+                </label>
+                <label class="field">
+                  <span class="field-label">Reintentos automáticos</span>
+                  <input id="set-max-retries" type="number" min="0" max="20" required />
+                </label>
+              </div>
+              <label class="field">
+                <span class="field-label">Límite de velocidad global (KB/s)</span>
+                <input id="set-speed-limit" type="number" min="0" step="50" required />
+                <span class="hint">0 = sin límite. Se aplica en conjunto a todas las descargas.</span>
+              </label>
+            </section>
+
+            <!-- Apariencia -->
+            <section class="tab-panel" data-panel="appearance" hidden>
+              <div class="field-label">Tema</div>
+              <div class="theme-options">
+                <label class="theme-card"><input type="radio" name="theme" value="system" /><span data-icon="monitor"></span><span>Sistema</span></label>
+                <label class="theme-card"><input type="radio" name="theme" value="light" /><span data-icon="sun"></span><span>Claro</span></label>
+                <label class="theme-card"><input type="radio" name="theme" value="dark" /><span data-icon="moon"></span><span>Oscuro</span></label>
+              </div>
+              <label class="check"><input id="set-tray" type="checkbox" /><span>Al cerrar la ventana, seguir en la bandeja del sistema</span></label>
+              <label class="check"><input id="set-notifications" type="checkbox" /><span>Mostrar notificación al terminar cada descarga</span></label>
+              <label class="check"><input id="set-clipboard" type="checkbox" /><span>Detectar automáticamente enlaces copiados al portapapeles</span></label>
+            </section>
+
+            <!-- Navegador -->
+            <section class="tab-panel" data-panel="browser" hidden>
+              <label class="check"><input id="set-server-enabled" type="checkbox" /><span>Permitir que la extensión del navegador envíe descargas</span></label>
+              <div class="server-status" id="set-server-status"></div>
+              <div class="grid-2">
+                <label class="field">
+                  <span class="field-label">Puerto local</span>
+                  <input id="set-server-port" type="number" min="1024" max="65535" required />
+                </label>
+                <label class="field">
+                  <span class="field-label">Token de seguridad</span>
+                  <div class="input-group">
+                    <input id="set-server-token" type="text" readonly spellcheck="false" />
+                    <button type="button" class="btn" id="set-copy-token" title="Copiar"><span data-icon="copy"></span></button>
+                    <button type="button" class="btn" id="set-new-token" title="Generar otro"><span data-icon="refresh-cw"></span></button>
+                  </div>
+                </label>
+              </div>
+              <label class="check"><input id="set-browser-confirm" type="checkbox" /><span>Mostrar el diálogo "Agregar descarga" antes de empezar</span></label>
+              <div class="callout">
+                <strong>Instalar la extensión (Chrome / Edge):</strong>
+                <ol>
+                  <li>Abre <code>chrome://extensions</code> o <code>edge://extensions</code> y activa el <em>Modo de desarrollador</em>.</li>
+                  <li>Pulsa <em>Cargar descomprimida</em> y elige la carpeta de la extensión.</li>
+                  <li>En las opciones de la extensión, escribe el mismo puerto y token que ves aquí.</li>
+                </ol>
+                <button type="button" class="btn" id="set-open-extension"><span data-icon="folder-open"></span><span>Abrir carpeta de la extensión</span></button>
+              </div>
+            </section>
+            <!-- Actualizaciones -->
+            <section class="tab-panel" data-panel="updates" hidden>
+              <div class="update-box">
+                <div class="update-title" id="upd-title">Versión instalada</div>
+                <div class="update-text muted" id="upd-text"></div>
+                <div class="progress" id="upd-progress" hidden><div class="progress-bar s-downloading" id="upd-bar"></div></div>
+                <div class="update-actions">
+                  <button type="button" class="btn" id="upd-check"><span data-icon="refresh-cw"></span><span>Buscar actualizaciones</span></button>
+                  <button type="button" class="btn btn-primary" id="upd-download" hidden><span data-icon="download"></span><span>Descargar</span></button>
+                  <button type="button" class="btn btn-primary" id="upd-install" hidden><span data-icon="rotate-cw"></span><span>Reiniciar e instalar</span></button>
+                </div>
+              </div>
+              <label class="check"><input id="set-auto-update" type="checkbox" /><span>Buscar actualizaciones automáticamente al abrir la app</span></label>
+              <p class="muted small">Las versiones se descargan desde GitHub Releases. Nunca se descarga ni se instala nada sin que lo pidas.</p>
+            </section>
+            <div class="form-error" id="settings-error" hidden></div>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn" data-close>Cancelar</button>
+          <button type="submit" class="btn btn-primary"><span data-icon="save"></span><span>Guardar</span></button>
+        </div>
+      </form>
+    </div>
+
+    <!-- ===================== DIÁLOGO: CONFIRMAR ===================== -->
+    <div class="modal-backdrop" id="modal-confirm" hidden>
+      <div class="modal modal-sm">
+        <div class="modal-header"><h2 id="confirm-title">¿Seguro?</h2></div>
+        <div class="modal-body">
+          <p id="confirm-text"></p>
+          <label class="check" id="confirm-check-wrap" hidden><input id="confirm-check" type="checkbox" /><span id="confirm-check-label"></span></label>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn" id="confirm-no">Cancelar</button>
+          <button type="button" class="btn btn-danger" id="confirm-yes">Aceptar</button>
+        </div>
+      </div>
+    </div>
+  </body>
+</html>

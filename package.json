@@ -1,0 +1,67 @@
+{
+  "name": "libredescarga",
+  "version": "1.0.0",
+  "description": "Gestor de descargas acelerado para Windows (estilo IDM) hecho con Electron",
+  "main": "src/main/main.js",
+  "author": "Williams Alexis Lopez Coronado",
+  "license": "MIT",
+  "private": true,
+  "scripts": {
+    "start": "electron .",
+    "icons": "node scripts/generate-icons.js",
+    "test": "node --test --test-concurrency=1 tests/*.test.js",
+    "dist": "electron-builder --win nsis --x64 --publish never",
+    "pack": "electron-builder --win dir --x64 --publish never"
+  },
+  "dependencies": {
+    "electron-store": "8.2.0",
+    "electron-updater": "6.8.3",
+    "lucide": "1.61.0"
+  },
+  "devDependencies": {
+    "electron": "44.9.3",
+    "electron-builder": "26.18.0"
+  },
+  "build": {
+    "appId": "com.libredescarga.app",
+    "productName": "LibreDescarga",
+    "copyright": "Copyright © 2026 Williams Alexis Lopez Coronado",
+    "directories": {
+      "output": "dist"
+    },
+    "files": [
+      "src/**/*",
+      "assets/**/*",
+      "package.json"
+    ],
+    "extraResources": [
+      {
+        "from": "extension",
+        "to": "extension"
+      }
+    ],
+    "publish": [
+      {
+        "provider": "github",
+        "owner": "WilliamsAlexis",
+        "repo": "LibreDescarga-Windows"
+      }
+    ],
+    "win": {
+      "target": [
+        "nsis"
+      ],
+      "icon": "assets/icon.png"
+    },
+    "nsis": {
+      "oneClick": false,
+      "perMachine": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "shortcutName": "LibreDescarga",
+      "artifactName": "LibreDescarga-Setup-${version}.${ext}",
+      "language": "3082"
+    }
+  }
+}

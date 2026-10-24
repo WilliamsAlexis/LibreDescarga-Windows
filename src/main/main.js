@@ -1,0 +1,453 @@
+/**
+ * main.js
+ * -----------------------------------------------------------------------------
+ * PUNTO DE ENTRADA de la aplicación (proceso principal de Electron).
+ *
+ * Responsabilidades:
+ *   1. Garantizar que solo haya UNA instancia abierta.
+ *   2. Crear la ventana con opciones de seguridad estrictas.
+ *   3. Crear los servicios: almacenamiento, gestor de descargas, limitador,
+ *      programador, vigilante del portapapeles y servidor del navegador.
+ *   4. Conectar los eventos de los servicios con la interfaz, la bandeja y
+ *      las notificaciones.
+ *   5. Cerrar todo de forma ordenada (guardando el progreso) al salir.
+ * -----------------------------------------------------------------------------
+ */
+
+const path = require('node:path');
+const crypto = require('node:crypto');
+const { app, BrowserWindow, Menu, nativeTheme, shell } = require('electron');
+
+const { createStores } = require('./stores');
+const { registerIpc } = require('./ipc');
+const { createTray } = require('./tray');
+const { showNotification } = require('./notifications');
+const { ClipboardWatcher } = require('./clipboardWatcher');
+const { runSelfTest } = require('./selfTest');
+const { DownloadManager } = require('../services/downloadManager');
+const { SpeedLimiter } = require('../services/speedLimiter');
+const { Scheduler } = require('../services/scheduler');
+const { BrowserServer } = require('../services/browserServer');
+const { Updater } = require('../services/updater');
+const { formatBytes, formatSpeed } = require('../utils/format');
+
+// Herramienta de desarrollo: permite usar otra carpeta de datos (ver selfTest.js).
+// Debe hacerse ANTES de que la app esté lista.
+if (process.env.LD_USER_DATA) app.setPath('userData', process.env.LD_USER_DATA);
+
+// Red de seguridad: si algún error se escapa sin capturar, lo registramos.
+// Sin esto, Electron muestra un cuadro de diálogo modal que congela la app
+// (y las descargas) hasta que alguien pulse "Aceptar".
+process.on('uncaughtException', (err) => console.error('Error no capturado:', err));
+process.on('unhandledRejection', (reason) => console.error('Promesa rechazada sin capturar:', reason));
+
+/** Estado global del proceso principal (todo en un único objeto para que sea fácil de seguir). */
+const state = {
+  window: null,
+  tray: null,
+  stores: null,
+  manager: null,
+  scheduler: null,
+  updater: null,
+  updateTimer: null,
+  server: null,
+  serverError: null,
+  clipboardWatcher: null,
+  statsTimer: null,
+  browserRequests: new Map(), // requestId -> { headers, createdAt }
+  isQuitting: false, // true cuando el usuario eligió salir de verdad
+  quitReady: false, // true cuando ya guardamos todo y podemos cerrar
+  trayHintShown: false,
+};
+
+/** Carpeta de la extensión: dentro de "resources" en la app instalada, o en el proyecto en desarrollo. */
+const EXTENSION_DIR = app.isPackaged
+  ? path.join(process.resourcesPath, 'extension')
+  : path.join(__dirname, '../../extension');
+
+/* ---------------------------------------------------------------------------
+ * Utilidades de ventana
+ * ------------------------------------------------------------------------- */
+
+/**
+ * Envía un mensaje a la interfaz (si la ventana existe).
+ * @param {string} channel - Nombre del canal.
+ * @param {*} payload - Datos.
+ * @returns {void}
+ */
+function send(channel, payload) {
+  const win = state.window;
+  if (win && !win.isDestroyed()) win.webContents.send(channel, payload);
+}
+
+/**
+ * Muestra la ventana (la crea si no existe) y la trae al frente.
+ * @returns {void}
+ */
+function showWindow() {
+  if (!state.window || state.window.isDestroyed()) createWindow();
+  if (state.window.isMinimized()) state.window.restore();
+  state.window.show();
+  state.window.focus();
+}
+
+/**
+ * Envía un mensaje cuando la interfaz esté lista (útil si la ventana se acaba de crear).
+ * @param {string} channel
+ * @param {*} payload
+ * @returns {void}
+ */
+function sendWhenReady(channel, payload) {
+  const contents = state.window?.webContents;
+  if (!contents) return;
+  if (contents.isLoading()) contents.once('did-finish-load', () => send(channel, payload));
+  else send(channel, payload);
+}
+
+/**
+ * Crea la ventana principal con la configuración de seguridad recomendada.
+ * @returns {void}
+ */
+function createWindow() {
+  const isDark = nativeTheme.shouldUseDarkColors;
+  const win = new BrowserWindow({
+    width: 1240,
+    height: 780,
+    minWidth: 920,
+    minHeight: 560,
+    show: false, // La mostramos cuando esté pintada (evita un parpadeo blanco).
+    backgroundColor: isDark ? '#0f1115' : '#f6f7fb',
+    icon: path.join(__dirname, '../../assets/icon.png'),
+    title: 'LibreDescarga',
+    webPreferences: {
+      preload: path.join(__dirname, '../preload/preload.js'),
+      contextIsolation: true, // La interfaz y el preload viven en mundos separados.
+      nodeIntegration: false, // La interfaz NO puede usar require() ni Node.
+      sandbox: true, // El renderer corre en la "caja de arena" de Chromium.
+      spellcheck: false,
+    },
+  });
+
+  win.loadFile(path.join(__dirname, '../renderer/index.html'));
+  win.once('ready-to-show', () => win.show());
+
+  // Seguridad: la interfaz nunca debe abrir ventanas nuevas ni navegar a otra página.
+  win.webContents.setWindowOpenHandler(() => ({ action: 'deny' }));
+  win.webContents.on('will-navigate', (event) => event.preventDefault());
+
+  // En desarrollo, mostramos en la terminal los mensajes de consola de la interfaz.
+  if (!app.isPackaged) {
+    win.webContents.on('console-message', (event, ...legacy) => {
+      const message = event.message ?? legacy[1];
+      const level = event.level ?? legacy[0];
+      console.log(`[renderer:${level}] ${message}`);
+    });
+  }
+
+  // Al pulsar la X: si está activado, escondemos la ventana en la bandeja.
+  win.on('close', (event) => {
+    if (state.isQuitting || !state.stores.getSettings().minimizeToTray) return;
+    event.preventDefault();
+    win.hide();
+    if (!state.trayHintShown) {
+      state.trayHintShown = true;
+      showNotification({
+        title: 'LibreDescarga sigue funcionando',
+        body: 'La app continúa en la bandeja del sistema. Usa clic derecho en el icono para salir.',
+        onClick: showWindow,
+      });
+    }
+  });
+
+  win.on('closed', () => {
+    state.window = null;
+  });
+  state.window = win;
+}
+
+/* ---------------------------------------------------------------------------
+ * Servicios
+ * ------------------------------------------------------------------------- */
+
+/** @returns {object} Configuración actual. */
+const getSettings = () => state.stores.getSettings();
+
+/** @returns {{running:boolean, port:number|null, error:string|null}} Estado del servidor local. */
+function getServerStatus() {
+  return { running: state.server?.running ?? false, port: state.server?.port ?? null, error: state.serverError };
+}
+
+/**
+ * Arranca o detiene el servidor del navegador según la configuración.
+ * @returns {Promise<void>}
+ */
+async function syncBrowserServer() {
+  state.serverError = null;
+  try {
+    if (getSettings().serverEnabled) await state.server.start();
+    else await state.server.stop();
+  } catch (err) {
+    state.serverError = err.message;
+    console.error('Servidor del navegador:', err.message);
+  }
+  send('server:status', getServerStatus());
+}
+
+/**
+ * Guarda la configuración y aplica sus efectos (tema, límites, servidor...).
+ * @param {object} changes - Cambios parciales.
+ * @returns {Promise<object>} Configuración resultante.
+ */
+async function updateSettings(changes) {
+  const before = getSettings();
+  const after = state.stores.saveSettings(changes);
+
+  nativeTheme.themeSource = after.theme; // 'system' | 'light' | 'dark'
+  state.manager.applySettings(); // límite de velocidad + tamaño de la cola
+
+  if (after.clipboardWatch) state.clipboardWatcher.start();
+  else state.clipboardWatcher.stop();
+
+  if (before.serverEnabled !== after.serverEnabled || before.serverPort !== after.serverPort) {
+    await syncBrowserServer();
+  }
+  send('settings:changed', after);
+  return after;
+}
+
+/**
+ * Atiende una URL recibida desde la extensión del navegador.
+ * @param {{url:string, fileName:string, referrer:string, cookies:string, userAgent:string}} payload
+ * @returns {Promise<object>} Respuesta para la extensión.
+ */
+async function handleBrowserDownload(payload) {
+  let url;
+  try {
+    url = new URL(payload.url);
+  } catch {
+    throw new Error('URL no válida');
+  }
+  if (url.protocol !== 'http:' && url.protocol !== 'https:') throw new Error('Solo se admiten URLs http(s)');
+
+  // Cabeceras para que el servidor nos trate igual que al navegador.
+  const headers = {};
+  if (/^https?:\/\//.test(payload.referrer)) headers.Referer = payload.referrer;
+  if (payload.cookies) headers.Cookie = payload.cookies;
+  if (payload.userAgent) headers['User-Agent'] = payload.userAgent;
+
+  if (getSettings().browserConfirm) {
+    // Mostramos el diálogo "Agregar descarga" relleno. Las cabeceras se quedan
+    // aquí guardadas con un id; la interfaz solo recibe el id.
+    const requestId = crypto.randomUUID();
+    state.browserRequests.set(requestId, { headers, createdAt: Date.now() });
+    // Limpiamos peticiones abandonadas de hace más de 1 hora.
+    for (const [id, req] of state.browserRequests) {
+      if (Date.now() - req.createdAt > 3600_000) state.browserRequests.delete(id);
+    }
+    showWindow();
+    sendWhenReady('browser:request', { requestId, url: url.href, fileName: payload.fileName });
+    return { pending: true };
+  }
+
+  const item = state.manager.add({ url: url.href, fileName: payload.fileName, headers, source: 'browser' });
+  return { id: item.id, fileName: item.fileName };
+}
+
+/**
+ * Conecta los eventos del gestor con la interfaz, las notificaciones y la bandeja.
+ * @returns {void}
+ */
+function wireManagerEvents() {
+  const { manager } = state;
+  manager.on('item-updated', (item) => send('downloads:updated', item));
+  manager.on('item-removed', (id) => send('downloads:removed', id));
+
+  manager.on('completed', (item) => {
+    if (!getSettings().notifications) return;
+    const hashText = item.hashOk === false ? ' · ⚠ el SHA-256 NO coincide' : item.hashOk ? ' · SHA-256 verificado' : '';
+    showNotification({
+      title: item.hashOk === false ? 'Descarga completada con advertencia' : 'Descarga completada',
+      body: `${item.fileName} (${formatBytes(item.totalBytes)})${hashText}`,
+      onClick: () => shell.showItemInFolder(item.savePath),
+    });
+  });
+
+  manager.on('failed', (item) => {
+    if (!getSettings().notifications) return;
+    showNotification({ title: 'Error en la descarga', body: `${item.fileName}: ${item.error}`, onClick: showWindow });
+  });
+
+  // Cada segundo: estadísticas para la barra de estado, la bandeja y la barra de tareas.
+  state.statsTimer = setInterval(() => {
+    const stats = manager.getStats();
+    state.tray?.update(stats, formatSpeed);
+    if (state.window && !state.window.isDestroyed()) {
+      // Progreso verde en el icono de la barra de tareas (-1 = quitarlo).
+      state.window.setProgressBar(stats.active && stats.progress !== null ? stats.progress : -1);
+    }
+    send('stats', stats);
+  }, 1000);
+}
+
+/**
+ * Instala la actualización ya descargada. Primero hacemos el cierre ordenado
+ * (pausar descargas y guardar el progreso) y después dejamos que el instalador
+ * cierre la app; así no se pierde nada de lo que había en curso.
+ * @returns {Promise<boolean>} true si se inició la instalación.
+ */
+async function installUpdate() {
+  if (state.updater?.state.status !== 'downloaded') return false;
+  state.isQuitting = true;
+  await shutdown();
+  state.quitReady = true; // Evita que before-quit repita el cierre.
+  return state.updater.install();
+}
+
+/**
+ * Cierre ordenado: detiene servicios, pausa descargas y guarda todo.
+ * @returns {Promise<void>}
+ */
+async function shutdown() {
+  try {
+    clearInterval(state.statsTimer);
+    clearTimeout(state.updateTimer);
+    state.scheduler?.stop();
+    state.clipboardWatcher?.stop();
+    await state.server?.stop();
+    await state.manager?.shutdown();
+    state.tray?.tray.destroy();
+  } catch (err) {
+    console.error('Error al cerrar:', err);
+  }
+}
+
+/* ---------------------------------------------------------------------------
+ * Arranque
+ * ------------------------------------------------------------------------- */
+
+/**
+ * Inicializa todo cuando Electron está listo.
+ * @returns {Promise<void>}
+ */
+async function bootstrap() {
+  // Necesario en Windows para que las notificaciones muestren el nombre de la app.
+  app.setAppUserModelId(app.isPackaged ? 'com.libredescarga.app' : process.execPath);
+  Menu.setApplicationMenu(null); // Sin la barra de menús clásica.
+
+  state.stores = createStores(app.getPath('downloads'));
+  nativeTheme.themeSource = getSettings().theme;
+
+  state.manager = new DownloadManager({
+    storage: state.stores.downloadsStorage,
+    getSettings,
+    limiter: new SpeedLimiter(),
+  });
+  state.manager.init();
+
+  state.clipboardWatcher = new ClipboardWatcher((url) => {
+    // Si la ventana está visible avisa la interfaz; si está oculta, una notificación.
+    if (state.window?.isVisible()) {
+      send('clipboard:url', url);
+    } else {
+      showNotification({
+        title: 'Enlace de descarga detectado',
+        body: `${url}\nHaz clic para descargarlo con LibreDescarga.`,
+        onClick: () => {
+          showWindow();
+          sendWhenReady('ui:open-add', { url });
+        },
+      });
+    }
+  });
+
+  state.server = new BrowserServer({ getSettings, onDownload: handleBrowserDownload, version: app.getVersion() });
+
+  // Solo la app instalada puede actualizarse (en desarrollo no hay instalador).
+  state.updater = new Updater({ enabled: app.isPackaged, currentVersion: app.getVersion() });
+  state.updater.on('status', (status) => send('update:status', status));
+
+  registerIpc({
+    updater: state.updater,
+    installUpdate,
+    manager: state.manager,
+    getSettings,
+    updateSettings,
+    getWindow: () => state.window,
+    getServerStatus,
+    takeBrowserRequest: (id) => {
+      const req = state.browserRequests.get(id);
+      state.browserRequests.delete(id);
+      return req;
+    },
+    clipboardWatcher: state.clipboardWatcher,
+    extensionDir: EXTENSION_DIR,
+  });
+
+  createWindow();
+
+  state.tray = createTray({
+    onShow: showWindow,
+    onAddUrl: () => {
+      showWindow();
+      sendWhenReady('ui:open-add', {});
+    },
+    onPauseAll: () => state.manager.pauseAll(),
+    onResumeAll: () => state.manager.resumeAll(),
+    onQuit: () => app.quit(),
+  });
+
+  wireManagerEvents();
+
+  state.scheduler = new Scheduler(state.manager, (items) => {
+    if (!getSettings().notifications) return;
+    showNotification({
+      title: 'Descargas programadas iniciadas',
+      body: items.map((i) => i.fileName).join(', '),
+      onClick: showWindow,
+    });
+  });
+  state.scheduler.start();
+
+  if (getSettings().clipboardWatch) state.clipboardWatcher.start();
+  await syncBrowserServer();
+
+  runSelfTest({ app, window: state.window, manager: state.manager });
+
+  // Buscar actualizaciones poco después de arrancar (si el usuario no lo desactivó).
+  // El aviso llega a la interfaz mediante el evento 'update:status'.
+  if (state.updater.state.status !== 'unavailable') {
+    state.updateTimer = setTimeout(() => {
+      if (getSettings().autoUpdateCheck) state.updater.check();
+    }, 15000);
+  }
+}
+
+// Solo una instancia: si ya hay una abierta, le pedimos que se muestre y salimos.
+if (!app.requestSingleInstanceLock()) {
+  app.quit();
+} else {
+  app.on('second-instance', () => showWindow());
+
+  app.whenReady().then(bootstrap).catch((err) => {
+    console.error('Error fatal al iniciar:', err);
+    app.exit(1);
+  });
+
+  // Antes de salir: guardamos todo. La primera vez cancelamos la salida,
+  // hacemos el cierre ordenado y luego volvemos a pedir salir.
+  app.on('before-quit', (event) => {
+    if (state.quitReady) return;
+    event.preventDefault();
+    if (state.isQuitting) return; // Ya estamos cerrando.
+    state.isQuitting = true;
+    shutdown().finally(() => {
+      state.quitReady = true;
+      app.quit();
+    });
+  });
+
+  // Si se cierran todas las ventanas (bandeja desactivada), salimos.
+  app.on('window-all-closed', () => {
+    if (!state.isQuitting) app.quit();
+  });
+}
