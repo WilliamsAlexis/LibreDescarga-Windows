@@ -60,11 +60,11 @@ function ldIsVideoPage(href) {
 }
 
 /** Configuración por defecto (debe coincidir con la de la app). */
-const LD_DEFAULTS = { port: 6801, token: '', intercept: false };
+const LD_DEFAULTS = { port: 6801, token: '', intercept: false, overlay: true, floating: true };
 
 /**
  * Lee la configuración guardada en chrome.storage.
- * @returns {Promise<{port:number, token:string, intercept:boolean}>}
+ * @returns {Promise<{port:number, token:string, intercept:boolean, overlay:boolean, floating:boolean}>}
  */
 async function ldGetConfig() {
   const stored = await chrome.storage.local.get(LD_DEFAULTS);

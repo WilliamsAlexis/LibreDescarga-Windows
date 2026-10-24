@@ -15,7 +15,7 @@
  * -----------------------------------------------------------------------------
  */
 
-import { state, STATUS_VIEWS, matchesFilters, visibleItems, selectedItems } from './state.js';
+import { state, popupMode, STATUS_VIEWS, matchesFilters, visibleItems, selectedItems } from './state.js';
 import { icon, hydrateIcons } from './icons.js';
 import { formatBytes, formatSpeed, formatEta, formatDate, formatDateLong, percentOf, escapeHtml, STATUS_LABELS, STATUS_ICONS } from './format.js';
 import { toast, setupModals, confirmDialog, showContextMenu } from './ui.js';
@@ -699,7 +699,26 @@ function notifyCompleted(item) {
  * Inicializa la interfaz.
  * @returns {Promise<void>}
  */
+/**
+ * Modo ventana: abre el diálogo con los datos que dejó main.js en la dirección
+ * de la página, y cierra la ventana en cuanto el diálogo se cierre (al añadir
+ * la descarga, al cancelar o al pulsar Escape).
+ * @returns {void}
+ */
+function startPopupMode() {
+  const query = new URLSearchParams(location.search);
+  openAddDialog({ url: query.get('url') || '', fileName: query.get('fileName') || '', browserRequestId: query.get('requestId') || '' });
+  const modal = $('modal-add');
+  new MutationObserver(() => {
+    if (modal.hidden) window.close();
+  }).observe(modal, { attributes: true, attributeFilter: ['hidden'] });
+}
+
 async function init() {
+  if (popupMode) {
+    document.body.classList.add('popup-mode');
+    document.title = 'Agregar descarga · LibreDescarga'; // La ventana toma el título de la página.
+  }
   setupLiveEvents();
   hydrateIcons(document); // Rellena los <span data-icon> del HTML estático.
   setupModals();
@@ -718,6 +737,7 @@ async function init() {
     // Mezclamos con lo que haya llegado por eventos mientras esperábamos.
     for (const item of initial.items) if (!state.items.has(item.id)) state.items.set(item.id, item);
     renderAll();
+    if (popupMode) startPopupMode();
   } catch (err) {
     toast({ title: 'No se pudo cargar el estado', text: err.message, type: 'error', duration: 0 });
   }

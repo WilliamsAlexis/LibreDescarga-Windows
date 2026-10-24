@@ -12,6 +12,13 @@
 
 import { percentOf } from './format.js';
 
+/**
+ * Modo ventana: la ventana pequeña "Agregar descarga" que abre la extensión del
+ * navegador (main.js > openAddWindow). Usa esta misma interfaz, pero solo muestra
+ * el diálogo y se cierra sola al terminar.
+ */
+export const popupMode = new URLSearchParams(location.search).get('popup') === 'add';
+
 export const state = {
   items: new Map(), // id -> descarga
   settings: null, // configuración actual

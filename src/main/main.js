@@ -43,6 +43,7 @@ process.on('unhandledRejection', (reason) => console.error('Promesa rechazada si
 const state = {
   window: null,
   tray: null,
+  addWindow: null, // Ventana pequeña "Agregar descarga" (para la extensión y los avisos)
   stores: null,
   manager: null,
   scheduler: null,
@@ -89,6 +90,70 @@ function showWindow() {
   if (state.window.isMinimized()) state.window.restore();
   state.window.show();
   state.window.focus();
+}
+
+/**
+ * Abre la ventana PEQUEÑA "Agregar descarga" sin mostrar la aplicación completa.
+ * La usan la extensión del navegador y los avisos de enlaces copiados: la app
+ * puede seguir oculta en la bandeja. Si la ventana ya está abierta, la reutiliza
+ * (cambia el enlace que muestra) en vez de abrir otra.
+ * Es la misma interfaz (index.html) en "modo ventana": solo enseña el diálogo.
+ * @param {object} [options]
+ * @param {string} [options.url] - Enlace a analizar.
+ * @param {string} [options.fileName] - Nombre sugerido.
+ * @param {string} [options.requestId] - Petición de la extensión (guarda cookies y cabeceras).
+ * @returns {void}
+ */
+function openAddWindow({ url = '', fileName = '', requestId = '' } = {}) {
+  const existing = state.addWindow;
+  if (existing && !existing.isDestroyed()) {
+    existing.webContents.send('browser:request', { requestId, url, fileName });
+    bringToFront(existing);
+    return;
+  }
+  const win = new BrowserWindow({
+    width: 660,
+    height: 780,
+    minWidth: 520,
+    minHeight: 460,
+    show: false,
+    backgroundColor: nativeTheme.shouldUseDarkColors ? '#0f1115' : '#f6f7fb',
+    icon: path.join(__dirname, '../../assets/icon.png'),
+    title: 'Agregar descarga · LibreDescarga',
+    autoHideMenuBar: true,
+    webPreferences: {
+      preload: path.join(__dirname, '../preload/preload.js'),
+      contextIsolation: true,
+      nodeIntegration: false,
+      sandbox: true,
+      spellcheck: false,
+    },
+  });
+  win.setMenu(null);
+  win.loadFile(path.join(__dirname, '../renderer/index.html'), { query: { popup: 'add', url, fileName, requestId } });
+  win.once('ready-to-show', () => bringToFront(win));
+  win.webContents.setWindowOpenHandler(() => ({ action: 'deny' }));
+  win.webContents.on('will-navigate', (event) => event.preventDefault());
+  win.on('closed', () => {
+    state.addWindow = null;
+  });
+  state.addWindow = win;
+}
+
+/**
+ * Trae una ventana al frente. Windows no deja que una app en segundo plano
+ * "robe" el foco, así que la ponemos un instante siempre-encima.
+ * @param {Electron.BrowserWindow} win
+ * @returns {void}
+ */
+function bringToFront(win) {
+  if (win.isMinimized()) win.restore();
+  win.setAlwaysOnTop(true);
+  win.show();
+  win.focus();
+  setTimeout(() => {
+    if (!win.isDestroyed()) win.setAlwaysOnTop(false);
+  }, 800);
 }
 
 /**
@@ -267,8 +332,7 @@ async function handleBrowserDownload(payload) {
     for (const [id, req] of state.browserRequests) {
       if (Date.now() - req.createdAt > 3600_000) state.browserRequests.delete(id);
     }
-    showWindow();
-    sendWhenReady('browser:request', { requestId, url: url.href, fileName: payload.fileName });
+    openAddWindow({ url: url.href, fileName: payload.fileName || '', requestId });
     return { pending: true };
   }
 
@@ -389,10 +453,7 @@ async function bootstrap() {
       showNotification({
         title: isVideo ? 'Vídeo o música detectado' : 'Enlace de descarga detectado',
         body: `${url.length > 90 ? url.slice(0, 87) + '…' : url}\nHaz clic para elegir calidad y descargarlo.`,
-        onClick: () => {
-          showWindow();
-          sendWhenReady('ui:open-add', { url });
-        },
+        onClick: () => openAddWindow({ url }),
       });
     }
   });
@@ -404,6 +465,7 @@ async function bootstrap() {
   state.updater.on('status', (status) => send('update:status', status));
 
   registerIpc({
+    notifyAdded: (text) => showNotification({ title: 'Descarga iniciada', body: text, onClick: showWindow }),
     media: state.media,
     mediaTools: state.mediaTools,
     updater: state.updater,
@@ -490,6 +552,6 @@ if (!app.requestSingleInstanceLock()) {
 
   // Si se cierran todas las ventanas (bandeja desactivada), salimos.
   app.on('window-all-closed', () => {
-    if (!state.isQuitting) app.quit();
+    if (!state.isQuitting && !state.tray) app.quit(); // Con la bandeja, la app sigue en segundo plano.
   });
 }

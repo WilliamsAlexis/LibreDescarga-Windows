@@ -147,7 +147,11 @@ Al cerrar la ventana, la app se minimiza a la bandeja y sigue descargando. Haz c
 4. Abre las **opciones** de la extensión, pega el token, comprueba el puerto y pulsa *Probar conexión*.
 
 Funciones de la extensión:
-- **Botón flotante "Descargar con LibreDescarga"** en las páginas de vídeo de YouTube, YouTube Music, Vimeo, TikTok, SoundCloud, etc. Al pulsarlo, la app se abre con el vídeo analizado para que elijas calidad o formato.
+- **Botón "Descargar" sobre cada vídeo, como en Internet Download Manager**, en cualquier página: aparece en la esquina del vídeo al pasar el ratón o al empezar a reproducirlo. Si la página tiene varios vídeos, el botón sigue al que tengas debajo del ratón, así que cada vídeo tiene el suyo.
+- **Icono sobre cada miniatura** de vídeo (YouTube, resultados de búsqueda, listas, TikTok, X…): descarga **ese** vídeo sin tener que abrirlo.
+- **Botón redondo flotante** en las páginas de vídeo de YouTube, YouTube Music, Vimeo, TikTok, SoundCloud, etc. (útil en YouTube Music, donde no siempre se ve el vídeo).
+- **Ventana pequeña:** al pulsar cualquiera de esos botones se abre solo el diálogo "Agregar descarga" en una ventana pequeña, sin mostrar la aplicación entera, para que elijas calidad o formato. Al descargar, la ventana se cierra y la app sigue en la bandeja; al empezar te avisa con una notificación y otra al terminar.
+- En **Opciones de la extensión** puedes desactivar el botón sobre los vídeos y el botón redondo.
 - Botón **"Descargar vídeo o audio de esta página"** en la ventana del icono de la extensión.
 - Menú de clic derecho: **"Descargar vídeo o audio de esta página"** (en cualquier página) y **"Descargar con LibreDescarga"** sobre enlaces, imágenes, vídeos y audios.
 - La ventana emergente lista además los enlaces a archivos de la página.

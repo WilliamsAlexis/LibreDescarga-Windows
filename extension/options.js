@@ -9,6 +9,8 @@
 const portEl = document.getElementById('port');
 const tokenEl = document.getElementById('token');
 const interceptEl = document.getElementById('intercept');
+const overlayEl = document.getElementById('overlay');
+const floatingEl = document.getElementById('floating');
 const messageEl = document.getElementById('message');
 
 /**
@@ -29,7 +31,7 @@ function showMessage(text, kind = '') {
 async function save() {
   const port = Number(portEl.value);
   if (!Number.isInteger(port) || port < 1024 || port > 65535) throw new Error('El puerto debe estar entre 1024 y 65535.');
-  await chrome.storage.local.set({ port, token: tokenEl.value.trim(), intercept: interceptEl.checked });
+  await chrome.storage.local.set({ port, token: tokenEl.value.trim(), intercept: interceptEl.checked, overlay: overlayEl.checked, floating: floatingEl.checked });
 }
 
 document.getElementById('form').addEventListener('submit', async (event) => {
@@ -60,4 +62,6 @@ ldGetConfig().then((config) => {
   portEl.value = config.port;
   tokenEl.value = config.token;
   interceptEl.checked = config.intercept;
+  overlayEl.checked = config.overlay;
+  floatingEl.checked = config.floating;
 });

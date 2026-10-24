@@ -2,7 +2,7 @@
   "manifest_version": 3,
   "name": "LibreDescarga — Integración con el navegador",
   "short_name": "LibreDescarga",
-  "version": "1.1.0",
+  "version": "1.2.0",
   "description": "Envía enlaces de descarga a la aplicación LibreDescarga (gestor de descargas acelerado).",
   "icons": {
     "16": "icons/icon16.png",
@@ -36,23 +36,14 @@
   "content_scripts": [
     {
       "matches": [
-        "*://*.youtube.com/*",
-        "*://youtu.be/*",
-        "*://*.vimeo.com/*",
-        "*://*.dailymotion.com/*",
-        "*://*.twitch.tv/*",
-        "*://*.tiktok.com/*",
-        "*://*.soundcloud.com/*",
-        "*://*.bandcamp.com/*",
-        "*://*.twitter.com/*",
-        "*://x.com/*",
-        "*://*.facebook.com/*",
-        "*://*.instagram.com/*"
+        "http://*/*",
+        "https://*/*"
       ],
       "js": [
         "common.js",
         "content.js"
       ],
+      "all_frames": true,
       "run_at": "document_idle"
     }
   ]

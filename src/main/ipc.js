@@ -95,7 +95,7 @@ function registerIpc(ctx) {
     // Si viene del navegador, recuperamos sus cabeceras (cookies, referer)
     // guardadas en el proceso principal: nunca pasan por la interfaz.
     const browser = typeof data.browserRequestId === 'string' ? ctx.takeBrowserRequest(data.browserRequestId) : null;
-    return manager.add({
+    const item = manager.add({
       url: data.url,
       fileName: typeof data.fileName === 'string' ? data.fileName : '',
       directory: typeof data.directory === 'string' ? data.directory : '',
@@ -105,6 +105,8 @@ function registerIpc(ctx) {
       headers: browser?.headers,
       source: browser ? 'browser' : data.source,
     });
+    if (browser) ctx.notifyAdded(item.fileName);
+    return item;
   });
 
   // Analiza una URL: ¿archivo directo, vídeo o lista? (ver mediaService.js)
@@ -136,8 +138,9 @@ function registerIpc(ctx) {
         }),
       );
     }
-    if (typeof data.browserRequestId === 'string') ctx.takeBrowserRequest(data.browserRequestId);
+    const fromBrowser = typeof data.browserRequestId === 'string' && ctx.takeBrowserRequest(data.browserRequestId);
     if (!created.length) throw new Error('No hay nada que descargar.');
+    if (fromBrowser) ctx.notifyAdded(created.length > 1 ? created.length + ' descargas' : created[0].fileName);
     return { count: created.length, first: created[0] };
   });
 
