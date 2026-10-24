@@ -22,7 +22,6 @@
  *   scheduled  -> programada para una hora
  *   downloading-> descargando
  *   merging    -> uniendo partes
- *   verifying  -> comprobando hash
  *   paused     -> en pausa
  *   completed  -> terminada
  *   error      -> falló (se puede reintentar)
@@ -39,10 +38,9 @@ const { DownloadTask } = require('./downloadTask');
 const { MediaTask, finalExtension } = require('./mediaTask');
 const { categorize, getCategoryDirectory } = require('../utils/categories');
 const { fileNameFromUrl, sanitizeFileName } = require('../utils/fileName');
-const { normalizeSha256 } = require('../utils/hash');
 
 /** Estados en los que la descarga está "trabajando" (ocupa un hueco de la cola). */
-const ACTIVE_STATUSES = new Set(['downloading', 'merging', 'verifying']);
+const ACTIVE_STATUSES = new Set(['downloading', 'merging']);
 
 /** Campos que solo tienen sentido en memoria y no se guardan en disco. */
 const VOLATILE_FIELDS = ['speed', 'eta', 'retryInfo'];
@@ -153,7 +151,6 @@ class DownloadManager extends EventEmitter {
    * @param {string} [options.fileName] - Nombre deseado (si no, se deduce).
    * @param {string} [options.directory] - Carpeta deseada (si no, la de su categoría).
    * @param {number} [options.connections] - Conexiones (1-16).
-   * @param {string} [options.expectedHash] - SHA-256 esperado (opcional).
    * @param {number} [options.scheduledAt] - Marca de tiempo (ms) para empezar más tarde.
    * @param {boolean} [options.startNow=true] - false = añadir en pausa.
    * @param {object} [options.headers] - Cabeceras extra (Referer, Cookie) desde el navegador.
@@ -174,10 +171,6 @@ class DownloadManager extends EventEmitter {
     if (url.protocol !== 'http:' && url.protocol !== 'https:') {
       throw new Error('Solo se admiten direcciones http:// o https://');
     }
-
-    // --- Validación del hash ---
-    const expectedHash = normalizeSha256(options.expectedHash);
-    if (expectedHash === null) throw new Error('El SHA-256 debe tener 64 caracteres hexadecimales.');
 
     // --- Nombre y carpeta provisionales (se confirman al sondear) ---
     const customFileName = Boolean(options.fileName && String(options.fileName).trim());
@@ -218,9 +211,6 @@ class DownloadManager extends EventEmitter {
       queuedAt: Date.now(),
       completedAt: null,
       scheduledAt: status === 'scheduled' ? scheduledAt : null,
-      expectedHash,
-      actualHash: null,
-      hashOk: null,
       headers: this.sanitizeHeaders(options.headers),
       source: ['manual', 'clipboard', 'browser'].includes(options.source) ? options.source : 'manual',
     };
@@ -310,9 +300,6 @@ class DownloadManager extends EventEmitter {
       queuedAt: Date.now(),
       completedAt: null,
       scheduledAt: status === 'scheduled' ? scheduledAt : null,
-      expectedHash: null,
-      actualHash: null,
-      hashOk: null,
       headers: {},
       source: ['manual', 'clipboard', 'browser'].includes(options.source) ? options.source : 'manual',
     };
@@ -517,8 +504,6 @@ class DownloadManager extends EventEmitter {
     item.totalBytes = item.kind === 'media' ? item.media?.estimatedBytes ?? null : null;
     item.savePath = null;
     item.error = null;
-    item.actualHash = null;
-    item.hashOk = null;
   }
 
   /* ------------------------------------------------------------------------

@@ -54,8 +54,7 @@ windows/
 │   │   ├── stores.js           Persistencia con electron-store (settings.json y downloads.json)
 │   │   ├── tray.js             Icono y menú de la bandeja del sistema
 │   │   ├── notifications.js    Notificaciones nativas de Windows
-│   │   ├── clipboardWatcher.js Detecta URLs copiadas al portapapeles
-│   │   └── selfTest.js         Autoprueba de desarrollo (solo se activa con variables de entorno)
+│   │   └── clipboardWatcher.js Detecta URLs copiadas al portapapeles
 │   ├── preload/
 │   │   └── preload.js      Puente seguro (contextBridge): expone window.api a la interfaz
 │   ├── renderer/           INTERFAZ (HTML, CSS y JS, sin acceso a Node)
@@ -63,7 +62,7 @@ windows/
 │   │   ├── styles.css          Diseño, tema claro y oscuro, animaciones
 │   │   └── js/                 app.js, ui.js, dialogs.js, state.js, format.js, icons.js
 │   ├── services/           LÓGICA DE NEGOCIO (sin dependencias de la ventana)
-│   │   ├── downloadTask.js     Motor: segmentos, Range, reintentos, pausa y reanudación, unión y hash
+│   │   ├── downloadTask.js     Motor: segmentos, Range, reintentos, pausa y reanudación y unión de partes
 │   │   ├── downloadManager.js  Cola, límite de simultáneas, eventos y persistencia
 │   │   ├── speedLimiter.js     Limitador global (token bucket) compartido por todas las conexiones
 │   │   ├── mediaTask.js        Descarga de vídeo/audio con yt-dlp (misma forma que downloadTask)
@@ -73,7 +72,7 @@ windows/
 │   │   ├── updater.js          Actualizaciones automáticas (electron-updater)
 │   │   ├── settingsService.js  Valores por defecto y validación de la configuración
 │   │   └── browserServer.js    Servidor HTTP local (127.0.0.1) para la extensión
-│   └── utils/              Utilidades: categories, fileName, format, hash, http, sleep
+│   └── utils/              Utilidades: categories, fileName, format, http, sleep
 ├── extension/              Extensión de Chrome y Edge (Manifest V3)
 ├── tools/                  yt-dlp.exe y ffmpeg.exe (los prepara scripts/fetch-tools.js; no se suben a git)
 └── tests/                  Pruebas automáticas (node --test) con un servidor HTTP de prueba
@@ -135,6 +134,11 @@ Carpeta por defecto y carpeta por categoría, conexiones por descarga (1–16), 
 ### Bandeja del sistema
 Al cerrar la ventana, la app se minimiza a la bandeja y sigue descargando. Haz clic en el icono para volver a abrirla. Para cerrarla del todo, usa **Salir** en el menú del icono.
 
+### Segundo plano: abrir con Windows y avisos de enlaces
+- **Abrir con Windows** (Configuración → Apariencia, activado por defecto): al iniciar sesión, LibreDescarga arranca **sin ventana**, directamente en la bandeja. Así la extensión del navegador y los avisos siempre funcionan, sin que tengas que abrir la app.
+- **Avisos de enlaces copiados:** mientras la app está en segundo plano (oculta, minimizada o detrás de otra ventana), si copias un enlace de un archivo o de un vídeo (YouTube, Vimeo, TikTok…) sale una **notificación de Windows**. Al pulsarla, la app se abre con el enlace ya analizado para que elijas calidad o formato. Si estás usando la ventana, el aviso sale dentro de la app. Se puede desactivar en Configuración con *Detectar automáticamente enlaces copiados*.
+- Solo funciona en la app **instalada** (no con `npm start`).
+
 ## 6. Extensión del navegador (Chrome y Edge)
 
 1. Abre LibreDescarga → **Configuración** → sección *Navegador*. Copia el **token** y anota el **puerto** (6801 por defecto). El botón *Abrir carpeta de la extensión* te lleva a ella.
@@ -157,12 +161,12 @@ Seguridad: el servidor solo escucha en `127.0.0.1`, exige la cabecera `X-LibreDe
 npm test
 ```
 
-Son 39 pruebas (16 de vídeo y audio, con descargas reales de YouTube en MP4 y MP3, pausa, reanudación y cancelación; 5 del actualizador, con un servidor simulado): reparto de segmentos, descarga con 8 conexiones con bytes idénticos al original, servidor sin `Range`, tamaño desconocido, reintentos, pausa con cierre y reanudación, cancelación, SHA-256, error 404, cola, limitador de velocidad, validación de la configuración, historial persistente, programador, servidor de la extensión, el flujo del actualizador y una **descarga real** de 10 MB desde internet.
+Son 41 pruebas (16 de vídeo y audio, con descargas reales de YouTube en MP4 y MP3, pausa, reanudación y cancelación; 3 de segundo plano y portapapeles; 5 del actualizador, con un servidor simulado): reparto de segmentos, descarga con 8 conexiones con bytes idénticos al original, servidor sin `Range`, tamaño desconocido, reintentos, pausa con cierre y reanudación, cancelación, error 404, cola, limitador de velocidad, validación de la configuración, historial persistente, programador, servidor de la extensión, el flujo del actualizador y una **descarga real** de 10 MB desde internet.
 
 ## 8. Empaquetado (instalador .exe)
 
 ```powershell
-npm run dist     # Genera el instalador:  dist\LibreDescarga-Setup-1.1.0.exe
+npm run dist     # Genera el instalador:  dist\LibreDescarga-Setup-1.2.0.exe
 npm run pack     # Solo la carpeta portable: dist\win-unpacked\LibreDescarga.exe (más rápido, útil para probar)
 npm run icons    # (Opcional) Vuelve a dibujar los iconos
 ```
@@ -175,15 +179,19 @@ El instalador permite elegir la carpeta de instalación y crea accesos directos 
 La app instalada busca versiones nuevas en **GitHub Releases** del repositorio `WilliamsAlexis/LibreDescarga-Windows` (configurado en `package.json`, apartado `build.publish`). Busca 15 segundos después de abrirse; se puede desactivar o lanzar a mano en **Configuración → Actualizaciones**. Nunca descarga ni instala nada sin que lo pidas, y al instalar guarda antes el progreso de las descargas en curso. En modo desarrollo (`npm start`) esta función está desactivada.
 
 **Cómo publicar una versión nueva:**
-1. Sube el número de `version` en `package.json` (por ejemplo, de `1.0.0` a `1.1.0`).
+1. Sube el número de `version` en `package.json` (por ejemplo, de `1.2.0` a `1.3.0`).
 2. Ejecuta `npm run dist`.
-3. En GitHub, crea un **Release** con la etiqueta `v1.1.0` y sube a él **estos tres archivos** de la carpeta `dist`:
-   - `LibreDescarga-Setup-1.1.0.exe`
-   - `LibreDescarga-Setup-1.1.0.exe.blockmap`
+3. En GitHub, crea un **Release** con la etiqueta `v1.3.0` y **márcalo como borrador (Draft)**. Sube a él **estos tres archivos** de la carpeta `dist`:
+   - `LibreDescarga-Setup-1.3.0.exe`
+   - `LibreDescarga-Setup-1.3.0.exe.blockmap`
    - `latest.yml`
-4. Publica el Release (no como borrador ni como pre-lanzamiento). Los usuarios con una versión anterior verán el aviso.
+4. Cuando estén **los tres** subidos, pulsa **Publish release**. Los usuarios con una versión anterior verán el aviso.
 
-Importante: `latest.yml` apunta al instalador por su nombre exacto, así que no renombres los archivos. El repositorio debe ser **público**; si es privado, la app no podrá consultar las versiones.
+Importante:
+- **Nunca publiques el Release antes de subir los tres archivos.** Mientras falte `latest.yml`, GitHub lo considera "la última versión" y la actualización de todos falla con "todavía no hay versiones publicadas".
+- `latest.yml` apunta al instalador por su nombre exacto, así que no renombres los archivos.
+- El repositorio debe ser **público**; si es privado, la app no podrá consultar las versiones.
+- Si instalaste la app "para todos los usuarios", Windows pedirá permiso de administrador al actualizar.
 
 ## 10. Dónde se guardan los datos
 

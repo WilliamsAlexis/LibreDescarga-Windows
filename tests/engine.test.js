@@ -6,7 +6,7 @@
  *   - servidor sin Range y sin tamaño conocido
  *   - reintentos cuando el servidor corta la conexión
  *   - pausa, "reinicio de la app" y reanudación
- *   - cancelación, hash SHA-256, errores 404 y nombres repetidos
+ *   - cancelación, errores 404 y nombres repetidos
  *   - una descarga REAL desde internet
  *
  * Ejecutar con:  npm test
@@ -177,27 +177,6 @@ test('cancelar borra las partes temporales', async () => {
     assert.equal(canceled.status, 'canceled');
     assert.equal(fs.existsSync(`${running.savePath}.ldtmp`), false);
     assert.equal(fs.existsSync(running.savePath), false);
-  } finally {
-    await manager.shutdown();
-    await server.close();
-  }
-});
-
-test('verificación SHA-256: correcta e incorrecta', async () => {
-  const data = randomData(1024 * 1024);
-  const server = await startTestServer(data);
-  const { manager } = createManager();
-  try {
-    const ok = manager.add({ url: server.url, expectedHash: sha256(data).toUpperCase() });
-    const bad = manager.add({ url: server.url, expectedHash: 'a'.repeat(64) });
-    const doneOk = await waitFor(manager, ok.id, isFinal);
-    const doneBad = await waitFor(manager, bad.id, isFinal);
-    assert.equal(doneOk.hashOk, true);
-    assert.equal(doneBad.hashOk, false);
-    assert.equal(doneBad.status, 'completed');
-    // Dos descargas con el mismo nombre no se pisan: "prueba (1).bin".
-    assert.notEqual(doneOk.savePath, doneBad.savePath);
-    assert.throws(() => manager.add({ url: server.url, expectedHash: 'xyz' }), /SHA-256/);
   } finally {
     await manager.shutdown();
     await server.close();

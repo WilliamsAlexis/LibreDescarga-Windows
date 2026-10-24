@@ -654,8 +654,7 @@ table.downloads {
   transition: width 0.45s ease; /* Avance suave entre actualizaciones */
 }
 .progress-bar.s-downloading,
-.progress-bar.s-merging,
-.progress-bar.s-verifying {
+.progress-bar.s-merging {
   /* Rayas diagonales que se desplazan = sensación de "en movimiento" */
   background:
     linear-gradient(135deg, rgba(255, 255, 255, 0.28) 25%, transparent 25%, transparent 50%,
@@ -705,7 +704,7 @@ table.downloads {
   color: var(--pill, var(--muted));
   background: color-mix(in srgb, var(--pill, var(--muted)) 13%, transparent);
 }
-.pill.s-downloading, .pill.s-merging, .pill.s-verifying { --pill: var(--accent); }
+.pill.s-downloading, .pill.s-merging { --pill: var(--accent); }
 .pill.s-completed { --pill: var(--success); }
 .pill.s-paused { --pill: var(--warning); }
 .pill.s-error { --pill: var(--danger); }

@@ -42,6 +42,7 @@ function createDefaultSettings(downloadsPath) {
     accent: 'blue', // Color de la aplicación (ver ACCENTS)
     clipboardWatch: true, // Detectar URLs copiadas
     minimizeToTray: true, // Al cerrar la ventana, ir a la bandeja
+    launchAtStartup: true, // Abrir con Windows, en segundo plano (bandeja)
     notifications: true, // Avisar al terminar cada descarga
     serverEnabled: true, // Servidor local para la extensión
     serverPort: 6801, // Puerto del servidor local
@@ -96,7 +97,7 @@ function sanitizeSettings(changes, current) {
   if (isText(c.cookiesBrowser) && (c.cookiesBrowser === '' || COOKIE_BROWSERS.includes(c.cookiesBrowser))) next.cookiesBrowser = c.cookiesBrowser;
   if (isText(c.serverToken) && /^[a-zA-Z0-9_-]{16,128}$/.test(c.serverToken)) next.serverToken = c.serverToken;
 
-  for (const key of ['clipboardWatch', 'minimizeToTray', 'notifications', 'serverEnabled', 'browserConfirm', 'autoUpdateCheck']) {
+  for (const key of ['clipboardWatch', 'minimizeToTray', 'launchAtStartup', 'notifications', 'serverEnabled', 'browserConfirm', 'autoUpdateCheck']) {
     if (typeof c[key] === 'boolean') next[key] = c[key];
   }
   return next;

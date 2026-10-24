@@ -18,7 +18,6 @@
 
 const fs = require('node:fs');
 const { ipcMain, shell, dialog, clipboard, app } = require('electron');
-const { probe } = require('../utils/http');
 const { CATEGORIES } = require('../utils/categories');
 const { generateToken } = require('../services/settingsService');
 
@@ -101,19 +100,11 @@ function registerIpc(ctx) {
       fileName: typeof data.fileName === 'string' ? data.fileName : '',
       directory: typeof data.directory === 'string' ? data.directory : '',
       connections: data.connections,
-      expectedHash: typeof data.expectedHash === 'string' ? data.expectedHash : '',
       scheduledAt: data.scheduledAt,
       startNow: data.startNow !== false,
       headers: browser?.headers,
       source: browser ? 'browser' : data.source,
     });
-  });
-
-  handle('downloads:probe', async (url) => {
-    if (typeof url !== 'string') throw new Error('URL no válida');
-    // AbortSignal.timeout corta el sondeo si el servidor tarda más de 15 s.
-    const info = await probe(url.trim(), { signal: AbortSignal.timeout(15000) });
-    return { fileName: info.fileName, totalBytes: info.totalBytes, resumable: info.resumable };
   });
 
   // Analiza una URL: ¿archivo directo, vídeo o lista? (ver mediaService.js)

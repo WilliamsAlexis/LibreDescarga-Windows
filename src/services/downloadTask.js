@@ -18,7 +18,6 @@
  *                     funciona incluso tras cerrar la app o un apagón.
  *   4. UNIÓN       -> al terminar todos los trozos los juntamos en orden en el
  *                     archivo final y borramos la carpeta temporal.
- *   5. VERIFICACIÓN-> si el usuario dio un SHA-256, lo comprobamos.
  *
  * Si el servidor NO acepta rangos, se usa una sola conexión normal (y si se
  * pausa, al reanudar empieza de cero porque no hay otra forma).
@@ -36,7 +35,6 @@ const { finished } = require('node:stream/promises');
 const { request, probe, HttpError, totalFromContentRange } = require('../utils/http');
 const { categorize, getCategoryDirectory } = require('../utils/categories');
 const { uniquePath } = require('../utils/fileName');
-const { sha256File } = require('../utils/hash');
 const { sleep } = require('../utils/sleep');
 
 /** Tamaño mínimo de cada segmento: no merece la pena dividir en trozos diminutos. */
@@ -122,16 +120,6 @@ function buildSegments(totalBytes, resumable, connections) {
  */
 function segmentLength(seg) {
   return seg.end === null ? null : seg.end - seg.start + 1;
-}
-
-/**
- * ¿Está completo un segmento?
- * @param {object} seg
- * @returns {boolean}
- */
-function isSegmentDone(seg) {
-  const length = segmentLength(seg);
-  return length === null ? Boolean(seg.done) : seg.downloaded >= length;
 }
 
 class DownloadTask extends EventEmitter {
@@ -511,12 +499,6 @@ class DownloadTask extends EventEmitter {
     }
     await DownloadTask.removeTempFiles(item);
 
-    // Verificación opcional del SHA-256.
-    if (item.expectedHash) {
-      this.setStatus('verifying');
-      item.actualHash = await sha256File(item.savePath);
-      item.hashOk = item.actualHash === item.expectedHash;
-    }
   }
 
   /* ------------------------------------------------------------------------
@@ -592,4 +574,4 @@ class DownloadTask extends EventEmitter {
   }
 }
 
-module.exports = { DownloadTask, buildSegments, friendlyError, isSegmentDone };
+module.exports = { DownloadTask, buildSegments, friendlyError };

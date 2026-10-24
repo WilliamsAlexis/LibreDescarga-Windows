@@ -29,7 +29,7 @@ export const state = {
 };
 
 /** Estados agrupados para los filtros de la barra lateral. */
-const ACTIVE = ['downloading', 'merging', 'verifying', 'queued'];
+const ACTIVE = ['downloading', 'merging', 'queued'];
 const UNFINISHED = ['paused', 'error', 'canceled'];
 
 /** Vistas por estado que aparecen en la barra lateral. */
@@ -58,7 +58,7 @@ export function matchesFilters(item) {
 }
 
 /** Orden lógico de los estados (para ordenar por la columna Estado). */
-const STATUS_ORDER = ['downloading', 'merging', 'verifying', 'queued', 'scheduled', 'paused', 'error', 'canceled', 'completed'];
+const STATUS_ORDER = ['downloading', 'merging', 'queued', 'scheduled', 'paused', 'error', 'canceled', 'completed'];
 
 /**
  * Valor por el que se ordena una descarga según la columna elegida.

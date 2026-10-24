@@ -23,7 +23,6 @@ const { registerIpc } = require('./ipc');
 const { createTray } = require('./tray');
 const { showNotification } = require('./notifications');
 const { ClipboardWatcher } = require('./clipboardWatcher');
-const { runSelfTest } = require('./selfTest');
 const { DownloadManager } = require('../services/downloadManager');
 const { SpeedLimiter } = require('../services/speedLimiter');
 const { Scheduler } = require('../services/scheduler');
@@ -32,10 +31,7 @@ const { Updater } = require('../services/updater');
 const { MediaTools } = require('../services/mediaTools');
 const { MediaService } = require('../services/mediaService');
 const { formatBytes, formatSpeed } = require('../utils/format');
-
-// Herramienta de desarrollo: permite usar otra carpeta de datos (ver selfTest.js).
-// Debe hacerse ANTES de que la app esté lista.
-if (process.env.LD_USER_DATA) app.setPath('userData', process.env.LD_USER_DATA);
+const { looksLikeVideoPageUrl } = require('../utils/categories');
 
 // Red de seguridad: si algún error se escapa sin capturar, lo registramos.
 // Sin esto, Electron muestra un cuadro de diálogo modal que congela la app
@@ -58,6 +54,7 @@ const state = {
   clipboardWatcher: null,
   statsTimer: null,
   browserRequests: new Map(), // requestId -> { headers, createdAt }
+  startHidden: process.argv.includes('--hidden'), // Windows nos abrió al iniciar sesión: arrancamos en la bandeja
   isQuitting: false, // true cuando el usuario eligió salir de verdad
   quitReady: false, // true cuando ya guardamos todo y podemos cerrar
   trayHintShown: false,
@@ -132,7 +129,11 @@ function createWindow() {
   });
 
   win.loadFile(path.join(__dirname, '../renderer/index.html'));
-  win.once('ready-to-show', () => win.show());
+  // Si Windows nos abrió al iniciar sesión (--hidden), nos quedamos en la bandeja sin mostrar la ventana.
+  win.once('ready-to-show', () => {
+    if (state.startHidden) state.startHidden = false;
+    else win.show();
+  });
 
   // Seguridad: la interfaz nunca debe abrir ventanas nuevas ni navegar a otra página.
   win.webContents.setWindowOpenHandler(() => ({ action: 'deny' }));
@@ -197,6 +198,22 @@ async function syncBrowserServer() {
 }
 
 /**
+ * Registra (o quita) la app en el inicio de Windows. Se abre con --hidden para
+ * quedarse en la bandeja, sin ventana. Solo en la app instalada: en desarrollo
+ * registraríamos electron.exe, que no es nuestra app.
+ * @param {boolean} enabled
+ * @returns {void}
+ */
+function applyStartupSetting(enabled) {
+  if (!app.isPackaged) return;
+  try {
+    app.setLoginItemSettings({ openAtLogin: Boolean(enabled), args: ['--hidden'] });
+  } catch (err) {
+    console.error('No se pudo configurar el inicio con Windows:', err.message);
+  }
+}
+
+/**
  * Guarda la configuración y aplica sus efectos (tema, límites, servidor...).
  * @param {object} changes - Cambios parciales.
  * @returns {Promise<object>} Configuración resultante.
@@ -210,6 +227,8 @@ async function updateSettings(changes) {
 
   if (after.clipboardWatch) state.clipboardWatcher.start();
   else state.clipboardWatcher.stop();
+
+  if (before.launchAtStartup !== after.launchAtStartup) applyStartupSetting(after.launchAtStartup);
 
   if (before.serverEnabled !== after.serverEnabled || before.serverPort !== after.serverPort) {
     await syncBrowserServer();
@@ -268,10 +287,9 @@ function wireManagerEvents() {
 
   manager.on('completed', (item) => {
     if (!getSettings().notifications) return;
-    const hashText = item.hashOk === false ? ' · ⚠ el SHA-256 NO coincide' : item.hashOk ? ' · SHA-256 verificado' : '';
     showNotification({
-      title: item.hashOk === false ? 'Descarga completada con advertencia' : 'Descarga completada',
-      body: `${item.fileName} (${formatBytes(item.totalBytes)})${hashText}`,
+      title: 'Descarga completada',
+      body: `${item.fileName} (${formatBytes(item.totalBytes)})`,
       onClick: () => shell.showItemInFolder(item.savePath),
     });
   });
@@ -341,6 +359,7 @@ async function bootstrap() {
 
   state.stores = createStores(app.getPath('downloads'));
   nativeTheme.themeSource = getSettings().theme;
+  applyStartupSetting(getSettings().launchAtStartup); // Mantiene el inicio con Windows al día (también tras actualizar).
 
   // Herramientas de vídeo/audio (yt-dlp + ffmpeg). Se copia yt-dlp a una carpeta escribible para poder actualizarlo.
   state.mediaTools = new MediaTools({
@@ -359,13 +378,17 @@ async function bootstrap() {
   state.manager.init();
 
   state.clipboardWatcher = new ClipboardWatcher((url) => {
-    // Si la ventana está visible avisa la interfaz; si está oculta, una notificación.
-    if (state.window?.isVisible()) {
+    // Si estás usando la ventana (tiene el foco), el aviso sale dentro de la app.
+    // En cualquier otro caso (oculta en la bandeja, minimizada o detrás de otra
+    // ventana) lanzamos una notificación de Windows, que sí se ve.
+    const win = state.window;
+    if (win && !win.isDestroyed() && win.isVisible() && !win.isMinimized() && win.isFocused()) {
       send('clipboard:url', url);
     } else {
+      const isVideo = looksLikeVideoPageUrl(url);
       showNotification({
-        title: 'Enlace de descarga detectado',
-        body: `${url}\nHaz clic para descargarlo con LibreDescarga.`,
+        title: isVideo ? 'Vídeo o música detectado' : 'Enlace de descarga detectado',
+        body: `${url.length > 90 ? url.slice(0, 87) + '…' : url}\nHaz clic para elegir calidad y descargarlo.`,
         onClick: () => {
           showWindow();
           sendWhenReady('ui:open-add', { url });
@@ -426,8 +449,6 @@ async function bootstrap() {
 
   if (getSettings().clipboardWatch) state.clipboardWatcher.start();
   await syncBrowserServer();
-
-  runSelfTest({ app, window: state.window, manager: state.manager });
 
   // Buscar actualizaciones poco después de arrancar (si el usuario no lo desactivó).
   // El aviso llega a la interfaz mediante el evento 'update:status'.

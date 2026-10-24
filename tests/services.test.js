@@ -27,7 +27,7 @@ test('cola: nunca más descargas simultáneas que el límite', async () => {
   try {
     let maxActive = 0;
     manager.on('item-updated', () => {
-      const active = manager.getAll().filter((i) => ['downloading', 'merging', 'verifying'].includes(i.status)).length;
+      const active = manager.getAll().filter((i) => ['downloading', 'merging'].includes(i.status)).length;
       maxActive = Math.max(maxActive, active);
     });
     const ids = Array.from({ length: 5 }, () => manager.add({ url: server.url, connections: 2 }).id);

@@ -48,7 +48,6 @@ contextBridge.exposeInMainWorld('api', {
 
   // --- Descargas ---
   addDownload: (data) => invoke('downloads:add', data),
-  probeUrl: (url) => invoke('downloads:probe', url),
   resolveUrl: (url, options) => invoke('media:resolve', url, options),
   addMedia: (data) => invoke('downloads:add-media', data),
   engineInfo: () => invoke('media:engine-info'),

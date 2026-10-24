@@ -137,11 +137,6 @@ function statusHtml(item) {
   const spinning = item.status === 'downloading' ? 'spin' : '';
   let pill = `<span class="pill s-${item.status}">${icon(STATUS_ICONS[item.status], 13, spinning)}${STATUS_LABELS[item.status]}</span>`;
   let sub = '';
-  if (item.status === 'completed' && item.hashOk === false) {
-    pill = `<span class="pill warn">${icon('shield-alert', 13)}Hash incorrecto</span>`;
-  } else if (item.status === 'completed' && item.hashOk) {
-    sub = `<div class="status-sub">${icon('shield-check', 11)} SHA-256 verificado</div>`;
-  }
   if (item.retryInfo) sub = `<div class="status-sub" title="${escapeHtml(item.retryInfo)}">${escapeHtml(item.retryInfo)}</div>`;
   else if (item.status === 'error') sub = `<div class="status-sub error" title="${escapeHtml(item.error)}">${escapeHtml(item.error)}</div>`;
   else if (item.status === 'scheduled') sub = `<div class="status-sub">${formatDate(item.scheduledAt)}</div>`;
@@ -279,12 +274,6 @@ function renderDetails() {
   const row = (label, value, extra = '') =>
     `<div class="detail-row ${extra}"><div class="detail-label">${label}</div><div class="detail-value ${extra.includes('mono') ? 'mono' : ''}" title="${escapeHtml(value)}">${escapeHtml(value)}</div></div>`;
 
-  let hashText = 'No se indicó';
-  if (item.expectedHash) {
-    if (item.hashOk === true) hashText = '✔ Coincide';
-    else if (item.hashOk === false) hashText = `✘ No coincide (obtenido: ${item.actualHash})`;
-    else hashText = `Pendiente · ${item.expectedHash}`;
-  }
 
   // Mini-barras por segmento: muestran cómo avanza cada conexión.
   const segments = (item.segments || [])
@@ -302,7 +291,6 @@ function renderDetails() {
     ${row(item.status === 'completed' ? 'Guardado en' : 'Se guardará en', item.savePath || item.directory, 'detail-wide')}
     ${row('Descargado', `${formatBytes(item.downloadedBytes)} de ${formatBytes(item.totalBytes)}`)}
     ${row('Añadida', formatDateLong(item.createdAt))}
-    ${row('Verificación SHA-256', hashText)}
     ${row(item.completedAt ? 'Completada' : item.scheduledAt ? 'Programada para' : 'Reanudable', item.completedAt ? formatDateLong(item.completedAt) : item.scheduledAt ? formatDateLong(item.scheduledAt) : item.probed ? (item.resumable ? 'Sí' : 'No (el servidor no admite rangos)') : 'Se sabrá al empezar')}
     ${item.error ? row('Error', item.error, 'detail-wide') : ''}
     ${segments ? `<div class="detail-row detail-wide"><div class="detail-label">Conexiones (${item.segments.length})</div><div class="segments">${segments}</div></div>` : ''}`;
@@ -691,11 +679,10 @@ function setupLiveEvents() {
  * @returns {void}
  */
 function notifyCompleted(item) {
-  const hashWarning = item.hashOk === false;
   toast({
-    title: hashWarning ? 'Completada, pero el SHA-256 no coincide' : 'Descarga completada',
+    title: 'Descarga completada',
     text: `${item.fileName} · ${formatBytes(item.totalBytes)}`,
-    type: hashWarning ? 'warning' : 'success',
+    type: 'success',
     duration: 7000,
     actions: [
       { label: 'Abrir', primary: true, onClick: () => run(() => api.openFile(item.id)) },

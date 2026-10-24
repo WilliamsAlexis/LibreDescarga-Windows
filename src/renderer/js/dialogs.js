@@ -578,6 +578,7 @@ export function openSettingsDialog(tab = 'general') {
   $('set-max-retries').value = s.maxRetries;
   $('set-speed-limit').value = s.speedLimitKBps;
   document.querySelectorAll('input[name=theme]').forEach((r) => (r.checked = r.value === s.theme));
+  $('set-startup').checked = s.launchAtStartup;
   $('set-tray').checked = s.minimizeToTray;
   $('set-notifications').checked = s.notifications;
   $('set-clipboard').checked = s.clipboardWatch;
@@ -698,6 +699,7 @@ function setupSettingsDialog() {
       maxRetries: Number($('set-max-retries').value),
       speedLimitKBps: Number($('set-speed-limit').value),
       theme: document.querySelector('input[name=theme]:checked')?.value,
+      launchAtStartup: $('set-startup').checked,
       minimizeToTray: $('set-tray').checked,
       notifications: $('set-notifications').checked,
       clipboardWatch: $('set-clipboard').checked,

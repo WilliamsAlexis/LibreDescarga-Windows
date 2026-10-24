@@ -136,12 +136,21 @@ async function startTestServer(data, opts = {}) {
   };
 }
 
+/** Carpetas temporales creadas por las pruebas: se borran todas al terminar. */
+const createdDirs = [];
+process.on('exit', () => {
+  for (const dir of createdDirs) fs.rmSync(dir, { recursive: true, force: true });
+  fs.rmSync(path.join(os.tmpdir(), 'libredescarga-test-tools'), { recursive: true, force: true });
+});
+
 /**
- * Crea una carpeta temporal vacía para una prueba.
+ * Crea una carpeta temporal vacía para una prueba (se borra sola al acabar).
  * @returns {string}
  */
 function tempDir() {
-  return fs.mkdtempSync(path.join(os.tmpdir(), 'libredescarga-test-'));
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'libredescarga-test-'));
+  createdDirs.push(dir);
+  return dir;
 }
 
 /**
