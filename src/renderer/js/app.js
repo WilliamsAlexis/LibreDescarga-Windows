@@ -299,11 +299,11 @@ function renderDetails() {
 
 /**
  * Aplica el color de la aplicación (el CSS lee el atributo data-accent).
- * @param {string} accent - 'blue', 'green', 'red'...
+ * @param {string} accent - 'logo', 'indigo', 'green', 'red'...
  * @returns {void}
  */
 function applyAccent(accent) {
-  document.documentElement.dataset.accent = accent || 'blue';
+  document.documentElement.dataset.accent = accent || 'logo';
 }
 
 /**

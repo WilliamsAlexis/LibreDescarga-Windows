@@ -127,10 +127,18 @@ test('configuración: solo se admiten navegadores conocidos para las cookies', (
 });
 
 test('configuración: solo se admiten colores de la lista', () => {
-  const current = createDefaultSettings('C:\Descargas');
-  assert.equal(current.accent, 'blue');
+  const current = createDefaultSettings('C:/Descargas');
+  assert.equal(current.accent, 'logo', 'el color de serie es el del logo');
   assert.equal(sanitizeSettings({ accent: 'green' }, current).accent, 'green');
-  assert.equal(sanitizeSettings({ accent: 'rojo-neon; x' }, current).accent, 'blue');
+  assert.equal(sanitizeSettings({ accent: 'rojo-neon; x' }, current).accent, 'logo', 'un valor desconocido se ignora');
+});
+
+test('configuración: los colores de versiones anteriores pasan al del logo', () => {
+  const current = createDefaultSettings('C:/Descargas');
+  const saved = { ...current, accent: 'blue' }; // Lo que guardaban las versiones 1.2.x por defecto.
+  assert.equal(sanitizeSettings(saved, current).accent, 'logo');
+  assert.equal(sanitizeSettings({ accent: 'teal' }, current).accent, 'logo');
+  assert.equal(sanitizeSettings({ accent: 'indigo' }, current).accent, 'indigo', 'el azul de antes sigue disponible como Índigo');
 });
 
 test('manager: sin herramientas de vídeo, addMedia falla con un mensaje claro', () => {

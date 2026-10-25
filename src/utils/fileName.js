@@ -164,7 +164,6 @@ function uniquePath(directory, fileName, isReserved = () => false) {
 
 module.exports = {
   sanitizeFileName,
-  fileNameFromContentDisposition,
   fileNameFromUrl,
   resolveFileName,
   uniquePath,

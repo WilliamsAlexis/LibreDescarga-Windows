@@ -179,4 +179,4 @@ async function probe(url, { headers = {}, signal } = {}) {
   };
 }
 
-module.exports = { request, probe, HttpError, totalFromContentRange, DEFAULT_HEADERS };
+module.exports = { request, probe, HttpError, totalFromContentRange };

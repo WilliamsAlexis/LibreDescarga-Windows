@@ -63,7 +63,7 @@
         button {
           all: initial; box-sizing: border-box; display: flex; align-items: center; gap: 6px; cursor: pointer;
           font: 600 12px/1 system-ui, 'Segoe UI', sans-serif; color: #fff; white-space: nowrap;
-          background: linear-gradient(135deg, #2563eb, #4f46e5); padding: 8px 12px; border-radius: 7px;
+          background: linear-gradient(135deg, #0a8f80, #006a60); padding: 8px 12px; border-radius: 7px;
           box-shadow: 0 2px 10px rgba(0, 0, 0, .45); border: 1px solid rgba(255, 255, 255, .25);
         }
         button:hover { filter: brightness(1.15); }
@@ -336,7 +336,7 @@
         .wrap { position: relative; }
         button.go {
           all: initial; box-sizing: border-box; width: 44px; height: 44px; border-radius: 50%; cursor: pointer; color: #fff;
-          background: linear-gradient(135deg, #2563eb, #4f46e5); display: flex; align-items: center; justify-content: center;
+          background: linear-gradient(135deg, #0a8f80, #006a60); display: flex; align-items: center; justify-content: center;
           box-shadow: 0 4px 14px rgba(0, 0, 0, .4); border: 1px solid rgba(255, 255, 255, .25); font: 600 18px system-ui;
         }
         button.go:hover { filter: brightness(1.15); }

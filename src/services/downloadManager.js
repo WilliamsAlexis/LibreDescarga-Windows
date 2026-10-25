@@ -643,4 +643,4 @@ class DownloadManager extends EventEmitter {
   }
 }
 
-module.exports = { DownloadManager, ACTIVE_STATUSES };
+module.exports = { DownloadManager };

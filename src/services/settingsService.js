@@ -15,7 +15,10 @@ const { CATEGORIES } = require('../utils/categories');
 const { COOKIE_BROWSERS } = require('./mediaTools');
 
 /** Colores de acento disponibles (cada uno tiene sus reglas en styles.css). */
-const ACCENTS = ['blue', 'green', 'red', 'purple', 'orange', 'pink', 'teal', 'slate'];
+const ACCENTS = ['logo', 'indigo', 'green', 'red', 'purple', 'orange', 'amber', 'pink', 'slate'];
+
+/** Nombres de colores de versiones anteriores y el color al que equivalen ahora. */
+const LEGACY_ACCENTS = { blue: 'logo', teal: 'logo' };
 
 /**
  * Genera un token aleatorio y difícil de adivinar para la extensión del navegador.
@@ -39,7 +42,7 @@ function createDefaultSettings(downloadsPath) {
     speedLimitKBps: 0, // Límite global en KB/s (0 = sin límite)
     maxRetries: 5, // Reintentos automáticos por conexión
     theme: 'system', // 'system' | 'light' | 'dark'
-    accent: 'blue', // Color de la aplicación (ver ACCENTS)
+    accent: 'logo', // Color de la aplicación (ver ACCENTS): el verde azulado del logo
     clipboardWatch: true, // Detectar URLs copiadas
     minimizeToTray: true, // Al cerrar la ventana, ir a la bandeja
     launchAtStartup: true, // Abrir con Windows, en segundo plano (bandeja)
@@ -93,6 +96,7 @@ function sanitizeSettings(changes, current) {
   if ('maxRetries' in c) next.maxRetries = clampInt(c.maxRetries, 0, 20, current.maxRetries);
   if (['system', 'light', 'dark'].includes(c.theme)) next.theme = c.theme;
   if (ACCENTS.includes(c.accent)) next.accent = c.accent;
+  else if (typeof c.accent === 'string' && Object.hasOwn(LEGACY_ACCENTS, c.accent)) next.accent = LEGACY_ACCENTS[c.accent]; // Guardado por una versión anterior.
   if ('serverPort' in c) next.serverPort = clampInt(c.serverPort, 1024, 65535, current.serverPort);
   if (isText(c.cookiesBrowser) && (c.cookiesBrowser === '' || COOKIE_BROWSERS.includes(c.cookiesBrowser))) next.cookiesBrowser = c.cookiesBrowser;
   if (isText(c.serverToken) && /^[a-zA-Z0-9_-]{16,128}$/.test(c.serverToken)) next.serverToken = c.serverToken;
@@ -103,4 +107,4 @@ function sanitizeSettings(changes, current) {
   return next;
 }
 
-module.exports = { createDefaultSettings, sanitizeSettings, generateToken, ACCENTS };
+module.exports = { createDefaultSettings, sanitizeSettings, generateToken };

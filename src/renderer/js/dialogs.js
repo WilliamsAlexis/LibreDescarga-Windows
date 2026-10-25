@@ -583,7 +583,7 @@ export function openSettingsDialog(tab = 'general') {
   $('set-notifications').checked = s.notifications;
   $('set-clipboard').checked = s.clipboardWatch;
   $('set-auto-update').checked = s.autoUpdateCheck;
-  document.querySelectorAll('input[name=accent]').forEach((r) => (r.checked = r.value === (s.accent || 'blue')));
+  document.querySelectorAll('input[name=accent]').forEach((r) => (r.checked = r.value === (s.accent || 'logo')));
   $('set-cookies-browser').value = s.cookiesBrowser || '';
   renderUpdateStatus();
   loadEngineInfo();

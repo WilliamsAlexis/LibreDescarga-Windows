@@ -188,7 +188,7 @@ export function showContextMenu(event, entries) {
 }
 
 /** Oculta el menú contextual. */
-export function hideContextMenu() {
+function hideContextMenu() {
   document.getElementById('context-menu').hidden = true;
 }
 

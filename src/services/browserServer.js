@@ -193,4 +193,4 @@ class BrowserServer {
   }
 }
 
-module.exports = { BrowserServer, safeEqual };
+module.exports = { BrowserServer };
