@@ -664,6 +664,9 @@ function setupSettingsDialog() {
   updateAction('upd-download', () => window.api.downloadUpdate());
   updateAction('upd-install', () => window.api.installUpdate());
 
+  // Donación por PayPal: se abre en el navegador predeterminado.
+  $('donate-paypal').addEventListener('click', () => window.api.openExternal('https://paypal.me/alexis031298').catch(() => {}));
+
   // Motor de vídeo (yt-dlp): actualizar a la última versión.
   $('engine-update').addEventListener('click', async () => {
     const button = $('engine-update');

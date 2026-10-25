@@ -131,6 +131,8 @@ El progreso de cada segmento se guarda continuamente. Si cierras la app, o se va
 ### Configuración (icono de engranaje)
 Carpeta por defecto y carpeta por categoría, conexiones por descarga (1–16), descargas simultáneas, límite de velocidad (KB/s, 0 = sin límite), reintentos, tema (sistema, claro u oscuro), **color de la aplicación**, navegador para las cookies y actualización del motor de vídeo, portapapeles, bandeja, notificaciones y el servidor para la extensión (puerto y token).
 
+En la pestaña **Apoyar** hay un botón de donación por PayPal y los códigos QR de Yape y Plin (los QR están en `assets/donate/`).
+
 ### Bandeja del sistema
 Al cerrar la ventana, la app se minimiza a la bandeja y sigue descargando. Haz clic en el icono para volver a abrirla. Para cerrarla del todo, usa **Salir** en el menú del icono.
 
@@ -165,7 +167,7 @@ Seguridad: el servidor solo escucha en `127.0.0.1`, exige la cabecera `X-LibreDe
 npm test
 ```
 
-Son 41 pruebas (16 de vídeo y audio, con descargas reales de YouTube en MP4 y MP3, pausa, reanudación y cancelación; 3 de segundo plano y portapapeles; 5 del actualizador, con un servidor simulado): reparto de segmentos, descarga con 8 conexiones con bytes idénticos al original, servidor sin `Range`, tamaño desconocido, reintentos, pausa con cierre y reanudación, cancelación, error 404, cola, limitador de velocidad, validación de la configuración, historial persistente, programador, servidor de la extensión, el flujo del actualizador y una **descarga real** de 10 MB desde internet.
+Son 42 pruebas (16 de vídeo y audio, con descargas reales de YouTube en MP4 y MP3, pausa, reanudación y cancelación; 3 de segundo plano y portapapeles; 5 del actualizador, con un servidor simulado): reparto de segmentos, descarga con 8 conexiones con bytes idénticos al original, servidor sin `Range`, tamaño desconocido, reintentos, pausa con cierre y reanudación, cancelación, error 404, cola, limitador de velocidad, validación de la configuración, historial persistente, programador, servidor de la extensión, el flujo del actualizador y una **descarga real** de 10 MB desde internet.
 
 ## 8. Empaquetado (instalador .exe)
 
@@ -183,11 +185,11 @@ El instalador permite elegir la carpeta de instalación y crea accesos directos 
 La app instalada busca versiones nuevas en **GitHub Releases** del repositorio `WilliamsAlexis/LibreDescarga-Windows` (configurado en `package.json`, apartado `build.publish`). Busca 15 segundos después de abrirse; se puede desactivar o lanzar a mano en **Configuración → Actualizaciones**. Nunca descarga ni instala nada sin que lo pidas, y al instalar guarda antes el progreso de las descargas en curso. En modo desarrollo (`npm start`) esta función está desactivada.
 
 **Cómo publicar una versión nueva (automático con GitHub Actions):**
-1. Sube el número de `version` en `package.json` (por ejemplo, de `1.2.0` a `1.3.0`) y sube los cambios a `main`.
+1. Sube el número de `version` en `package.json` (por ejemplo, de `1.3.0` a `1.4.0`) y sube los cambios a `main`.
 2. Crea y sube la etiqueta con ese mismo número:
    ```
-   git tag v1.3.0
-   git push origin v1.3.0
+   git tag v1.4.0
+   git push origin v1.4.0
    ```
 3. GitHub compila el instalador en sus propios servidores (tarda unos 5 minutos; se ve en la pestaña *Actions* del repositorio) y publica el Release con los tres archivos que necesita la actualización: el instalador, su `.blockmap` y `latest.yml`. **No hace falta subir nada desde tu ordenador.**
 

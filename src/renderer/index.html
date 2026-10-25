@@ -302,6 +302,7 @@
             <button type="button" class="tab" data-tab="browser"><span data-icon="globe"></span> Navegador</button>
             <button type="button" class="tab" data-tab="media"><span data-icon="film"></span> Vídeo y audio</button>
             <button type="button" class="tab" data-tab="updates"><span data-icon="refresh-cw"></span> Actualizaciones</button>
+            <button type="button" class="tab" data-tab="donate"><span data-icon="heart"></span> Apoyar</button>
           </nav>
           <div class="modal-body tab-panels">
             <!-- Carpetas -->
@@ -441,6 +442,26 @@
               </div>
               <label class="check"><input id="set-auto-update" type="checkbox" /><span>Buscar actualizaciones automáticamente al abrir la app</span></label>
               <p class="muted small">Las versiones se descargan desde GitHub Releases. Nunca se descarga ni se instala nada sin que lo pidas.</p>
+            </section>
+
+            <!-- Donaciones -->
+            <section class="tab-panel" data-panel="donate" hidden>
+              <p>LibreDescarga es gratuita y sin publicidad. Si te resulta útil, puedes apoyar su desarrollo con una donación voluntaria. ¡Gracias!</p>
+              <div class="donate-paypal">
+                <button type="button" class="btn btn-primary" id="donate-paypal"><span data-icon="heart"></span><span>Donar con PayPal</span></button>
+                <span class="muted small">paypal.me/alexis031298</span>
+              </div>
+              <div class="donate-qrs">
+                <figure class="donate-qr">
+                  <img src="../../assets/donate/yape.png" alt="Código QR de Yape" />
+                  <figcaption>Yape</figcaption>
+                </figure>
+                <figure class="donate-qr">
+                  <img src="../../assets/donate/plin.png" alt="Código QR de Plin" />
+                  <figcaption>Plin · Williams Alexis Lopez Coronado</figcaption>
+                </figure>
+              </div>
+              <p class="muted small">Escanea el código con la app de Yape o Plin (pagos en soles, Perú).</p>
             </section>
             <div class="form-error" id="settings-error" hidden></div>
           </div>
