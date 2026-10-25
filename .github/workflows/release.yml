@@ -1,0 +1,68 @@
+# Publica una versión de LibreDescarga automáticamente.
+#
+# Cómo se usa: cambia "version" en package.json, súbelo a GitHub y crea una etiqueta
+# con ese número, por ejemplo:
+#     git tag v1.3.0
+#     git push origin v1.3.0
+# GitHub compila el instalador en sus propios servidores (no hace falta subir nada
+# desde tu ordenador) y publica el Release con los TRES archivos que necesita la
+# actualización automática: el instalador, su .blockmap y latest.yml.
+#
+# El Release se crea como borrador y solo se publica al final, cuando están los tres
+# archivos. Así la app nunca ve una versión a medias.
+
+name: Publicar versión
+
+on:
+  push:
+    tags: ['v*']
+
+permissions:
+  contents: write # Necesario para crear el Release y subir archivos.
+
+jobs:
+  release:
+    runs-on: windows-latest
+    timeout-minutes: 40
+    steps:
+      - name: Descargar el código
+        uses: actions/checkout@v4
+
+      - name: Preparar Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Instalar dependencias
+        run: npm ci
+
+      - name: Comprobar que la etiqueta coincide con la versión de package.json
+        shell: bash
+        run: |
+          version=$(node -p "require('./package.json').version")
+          if [ "v$version" != "${GITHUB_REF_NAME}" ]; then
+            echo "La etiqueta ${GITHUB_REF_NAME} no coincide con la versión $version de package.json."
+            exit 1
+          fi
+
+      - name: Preparar yt-dlp y ffmpeg
+        run: node scripts/fetch-tools.js --strict
+
+      - name: Compilar y subir el instalador (borrador)
+        run: npx electron-builder --win nsis --x64 --publish always
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Comprobar los archivos y publicar
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          assets=$(gh release view "$GITHUB_REF_NAME" --json assets --jq '.assets[].name')
+          echo "$assets"
+          for pattern in '^LibreDescarga-Setup-.*\.exe$' '^LibreDescarga-Setup-.*\.exe\.blockmap$' '^latest\.yml$'; do
+            echo "$assets" | grep -Eq "$pattern" || { echo "Falta un archivo que cumpla $pattern: no se publica."; exit 1; }
+          done
+          gh release edit "$GITHUB_REF_NAME" --draft=false --latest
+          echo "Publicado $GITHUB_REF_NAME"

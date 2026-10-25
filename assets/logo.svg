@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  Logo de LibreDescarga: el mismo de la aplicación de Android
+  (ic_libre_logo.xml del proyecto "V2 - CLAUDE"). Una flecha de descarga que cae
+  en una forma abierta con punta de ala, que transmite libertad.
+
+  Es la ÚNICA fuente de todos los iconos: "npm run icons" genera a partir de
+  este archivo assets/icon.png, assets/tray.png y los iconos de la extensión.
+  Los colores y las formas son exactamente los del logo de Android.
+-->
+<svg xmlns="http://www.w3.org/2000/svg" width="108" height="108" viewBox="0 0 108 108">
+  <!-- Fondo circular verde azulado -->
+  <circle cx="54" cy="54" r="50" fill="#006A60"/>
+
+  <!-- Forma abierta tipo "ala" (ámbar) -->
+  <path d="M36,48 C36,64 44,74 54,74 C64,74 72,66 72,54"
+        fill="none" stroke="#FFC857" stroke-width="6" stroke-linecap="round" stroke-linejoin="round"/>
+  <path d="M36,48 C34,43 34,39 36,35"
+        fill="none" stroke="#FFC857" stroke-width="5" stroke-linecap="round"/>
+
+  <!-- Flecha de descarga (blanca) -->
+  <path d="M50.5,32 L57.5,32 L57.5,50 L65.5,50 L54,63 L42.5,50 L50.5,50 Z" fill="#FFFFFF"/>
+</svg>

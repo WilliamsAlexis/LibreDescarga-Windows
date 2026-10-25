@@ -22,7 +22,7 @@ const { Tray, Menu, nativeImage } = require('electron');
  * @returns {{tray: Tray, update: (stats: object, formatSpeed: (n:number)=>string) => void}}
  */
 function createTray({ onShow, onAddUrl, onPauseAll, onResumeAll, onQuit }) {
-  const image = nativeImage.createFromPath(path.join(__dirname, '../../assets/tray.png')).resize({ width: 16, height: 16 });
+  const image = nativeImage.createFromPath(path.join(__dirname, '../../assets/tray.png')).resize({ width: 32, height: 32 }); // Windows lo reduce solo; así se ve nítido con escalado de pantalla
   const tray = new Tray(image);
   tray.setToolTip('LibreDescarga');
 

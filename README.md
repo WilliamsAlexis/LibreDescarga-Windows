@@ -44,9 +44,9 @@ npm start
 ```
 windows/
 ├── package.json            Dependencias, scripts y configuración de electron-builder
-├── assets/                 Iconos de la app (icon.png) y de la bandeja (tray.png)
+├── assets/                 logo.svg (el mismo logo que la app de Android) y los iconos que salen de él: icon.png y tray.png
 ├── scripts/
-│   └── generate-icons.js   Dibuja los iconos PNG sin librerías externas (npm run icons)
+│   └── generate-icons.js   Genera todos los iconos PNG a partir de assets/logo.svg (npm run icons)
 ├── src/
 │   ├── main/               PROCESO PRINCIPAL (Node.js con acceso al sistema)
 │   │   ├── main.js             Punto de entrada: ventana, servicios y ciclo de vida
@@ -172,7 +172,7 @@ Son 41 pruebas (16 de vídeo y audio, con descargas reales de YouTube en MP4 y M
 ```powershell
 npm run dist     # Genera el instalador:  dist\LibreDescarga-Setup-1.2.0.exe
 npm run pack     # Solo la carpeta portable: dist\win-unpacked\LibreDescarga.exe (más rápido, útil para probar)
-npm run icons    # (Opcional) Vuelve a dibujar los iconos
+npm run icons    # (Opcional) Regenera los iconos de la app y de la extensión desde assets/logo.svg
 ```
 
 El instalador permite elegir la carpeta de instalación y crea accesos directos en el escritorio y en el menú Inicio. No está firmado digitalmente, así que Windows SmartScreen puede mostrar un aviso: pulsa *Más información → Ejecutar de todas formas*.
