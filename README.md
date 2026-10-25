@@ -182,17 +182,20 @@ El instalador permite elegir la carpeta de instalación y crea accesos directos 
 
 La app instalada busca versiones nuevas en **GitHub Releases** del repositorio `WilliamsAlexis/LibreDescarga-Windows` (configurado en `package.json`, apartado `build.publish`). Busca 15 segundos después de abrirse; se puede desactivar o lanzar a mano en **Configuración → Actualizaciones**. Nunca descarga ni instala nada sin que lo pidas, y al instalar guarda antes el progreso de las descargas en curso. En modo desarrollo (`npm start`) esta función está desactivada.
 
-**Cómo publicar una versión nueva:**
-1. Sube el número de `version` en `package.json` (por ejemplo, de `1.2.0` a `1.3.0`).
-2. Ejecuta `npm run dist`.
-3. En GitHub, crea un **Release** con la etiqueta `v1.3.0` y **márcalo como borrador (Draft)**. Sube a él **estos tres archivos** de la carpeta `dist`:
-   - `LibreDescarga-Setup-1.3.0.exe`
-   - `LibreDescarga-Setup-1.3.0.exe.blockmap`
-   - `latest.yml`
-4. Cuando estén **los tres** subidos, pulsa **Publish release**. Los usuarios con una versión anterior verán el aviso.
+**Cómo publicar una versión nueva (automático con GitHub Actions):**
+1. Sube el número de `version` en `package.json` (por ejemplo, de `1.2.0` a `1.3.0`) y sube los cambios a `main`.
+2. Crea y sube la etiqueta con ese mismo número:
+   ```
+   git tag v1.3.0
+   git push origin v1.3.0
+   ```
+3. GitHub compila el instalador en sus propios servidores (tarda unos 5 minutos; se ve en la pestaña *Actions* del repositorio) y publica el Release con los tres archivos que necesita la actualización: el instalador, su `.blockmap` y `latest.yml`. **No hace falta subir nada desde tu ordenador.**
 
-Importante:
-- **Nunca publiques el Release antes de subir los tres archivos.** Mientras falte `latest.yml`, GitHub lo considera "la última versión" y la actualización de todos falla con "todavía no hay versiones publicadas".
+El flujo está en `.github/workflows/release.yml`. Crea el Release como borrador y solo lo publica cuando están los tres archivos, así la app nunca ve una versión a medias. Si algo falla, el Release queda en borrador (oculto) y las apps siguen viendo la versión anterior.
+
+Notas:
+- **Nunca publiques a mano un Release antes de que estén los tres archivos.** Mientras falte `latest.yml`, GitHub lo considera "la última versión" y la actualización de todos falla con "todavía no hay versiones publicadas".
+- `npm run dist` sigue generando el instalador en tu ordenador (carpeta `dist`) para probarlo, pero ya no hace falta subirlo: lo hace GitHub.
 - `latest.yml` apunta al instalador por su nombre exacto, así que no renombres los archivos.
 - El repositorio debe ser **público**; si es privado, la app no podrá consultar las versiones.
 - Si instalaste la app "para todos los usuarios", Windows pedirá permiso de administrador al actualizar.

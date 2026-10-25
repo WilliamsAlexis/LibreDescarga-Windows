@@ -49,20 +49,31 @@ jobs:
       - name: Preparar yt-dlp y ffmpeg
         run: node scripts/fetch-tools.js --strict
 
-      - name: Compilar y subir el instalador (borrador)
+      # Creamos el borrador UNA vez antes de compilar. Si no, electron-builder sube los
+      # archivos en paralelo y cada subida crea su propio Release (quedan repartidos en dos).
+      - name: Crear el borrador del Release
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: gh release create "$GITHUB_REF_NAME" --draft --verify-tag --title "LibreDescarga ${GITHUB_REF_NAME#v}" --generate-notes
+
+      - name: Compilar y subir el instalador
         run: npx electron-builder --win nsis --x64 --publish always
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
+      # "gh release view" no ve los borradores, así que lo buscamos por la API.
       - name: Comprobar los archivos y publicar
         shell: bash
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          assets=$(gh release view "$GITHUB_REF_NAME" --json assets --jq '.assets[].name')
+          ids=$(gh api "repos/$GITHUB_REPOSITORY/releases?per_page=30" --jq ".[] | select(.tag_name==\"$GITHUB_REF_NAME\") | .id")
+          if [ "$(echo "$ids" | wc -w)" != 1 ]; then echo "Hay $(echo "$ids" | wc -w) Releases con la etiqueta $GITHUB_REF_NAME (debería haber 1): no se publica."; exit 1; fi
+          assets=$(gh api "repos/$GITHUB_REPOSITORY/releases/$ids" --jq ".assets[].name")
           echo "$assets"
           for pattern in '^LibreDescarga-Setup-.*\.exe$' '^LibreDescarga-Setup-.*\.exe\.blockmap$' '^latest\.yml$'; do
             echo "$assets" | grep -Eq "$pattern" || { echo "Falta un archivo que cumpla $pattern: no se publica."; exit 1; }
           done
-          gh release edit "$GITHUB_REF_NAME" --draft=false --latest
+          gh api -X PATCH "repos/$GITHUB_REPOSITORY/releases/$ids" -F draft=false -f make_latest=true
           echo "Publicado $GITHUB_REF_NAME"
